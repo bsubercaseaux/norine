@@ -35,19 +35,12 @@ def lex_smaller(seq1, seq2, enc, max_comparisons=float('inf')):
     
     enc.add_clauses(clauses)
     
-def lex_smaller_reverse(seq1, seq2, enc):
-    lex_smaller(seq2, seq1, enc)
-
-
-
 def encode(n, deg_constraint, cubing_depth):
     """
     Encode whether there is a 2-coloring of the edges of the hypercube graph on n vertices
     such that antipodal edges have different colors, and no monochromatic path exists between antipodal vertices.
     """
     vertices = list(itertools.product([0, 1], repeat=n))
-
-        
     graph = {}
     for v in vertices:
         graph[v] = set()
@@ -61,11 +54,9 @@ def encode(n, deg_constraint, cubing_depth):
     enc = modeler.Modeler()
     for u in vertices:
         for v in graph[u]:
-            if u < v:
-                # if [u, v] < sorted([anti(u), anti(v)]):
+            if u < v and [u, v] < sorted([anti(u), anti(v)]):
                 enc.add_var(f"r_{u, v}")
                 
-    
     print(f"Neighbors of {vertices[0]}: {graph[vertices[0]]}")
     
     def e(u, v):
@@ -80,27 +71,21 @@ def encode(n, deg_constraint, cubing_depth):
             return enc.v(f"r_{u, v}")
         return -enc.v(f"r_{au, av}")
 
-    def e_safe(u, v):
-        return e(u, v) 
-        return enc.v(f"r_{u, v}") if u < v else -enc.v(f"r_{v, u}")
 
     print("r variables:", enc.n_vars())
     for u in vertices:
         for v in vertices:
             if u < v:
                 enc.add_var(f"rpath_{u, v}")
-                # enc.add_var(f"bpath_{u, v}")
                 
     def rpath(u, v):
         return enc.v(f"rpath_{min(u, v), max(u, v)}")
             
     for u in vertices:
         for v in graph[u]:
-            enc.add_clause([-e_safe(u, v), rpath(u, v)])
+            enc.add_clause([-e(u, v), rpath(u, v)])
             # enc.add_clause([-rpath(u, v), e_safe(u, v)])
             
-    # for v in list(graph[u])[:n//2]:
-    #     enc.add_clause([e_safe(u, v)])
     
     def flip_i(v, i):
         return tuple((1 - x) if j == i else x for j, x in enumerate(v))
@@ -116,53 +101,28 @@ def encode(n, deg_constraint, cubing_depth):
         for v in graph[u]:
             if u < v and [u, v] < sorted([anti(u), anti(v)]):
                 original_edges.append((u, v))
-                
-   
-    
-    # original_edges = [(u, v) for u in vertices for v in graph[u] if u < v]
-    # original_edges = original_edges[:50]
-    
-    # enc.exactly_k([e(vertices[0], v) for v in graph[vertices[0]]], 1)
-    
+
     def int_to_bin(n_):
         return tuple(int(x) for x in bin(n_)[2:].zfill(n))
-    
-    # positive_edges = [(int_to_bin(0), int_to_bin(1)), (int_to_bin(2), int_to_bin(3))]
-    # negative_edges = [(int_to_bin(0), int_to_bin(2)), (int_to_bin(1), int_to_bin(3))]
     
     positive_edges = []
     negative_edges = []
 
+    if deg_constraint >= 0:
+        enc.exactly_k([e(int_to_bin(0), v) for v in graph[int_to_bin(0)]], deg_constraint)
+        for u in range(1, 2**n):
+            if deg_constraint == 1:
+                enc.add_clause([e(int_to_bin(u), v) for v in graph[int_to_bin(u)]])
+                enc.add_clause([-e(int_to_bin(u), v) for v in graph[int_to_bin(u)]])
+            else:
+                enc.at_least_k([e(int_to_bin(u), v) for v in graph[int_to_bin(u)]], deg_constraint)
+                enc.at_least_k([-e(int_to_bin(u), v) for v in graph[int_to_bin(u)]], deg_constraint)
 
-    enc.exactly_k([e(int_to_bin(0), v) for v in graph[int_to_bin(0)]], deg_constraint)
-    for u in range(1, 2**n):# positive_edges = []
-    #     vrs = [e(int_to_bin(u), v) for v in graph[int_to_bin(u)]]
-    #     # print("len vrs", len(vrs))
-        if deg_constraint == 1:
-            enc.add_clause([e(int_to_bin(u), v) for v in graph[int_to_bin(u)]])
-            enc.add_clause([-e(int_to_bin(u), v) for v in graph[int_to_bin(u)]])
-        else:
-            enc.at_least_k([e(int_to_bin(u), v) for v in graph[int_to_bin(u)]], deg_constraint)
-            enc.at_least_k([-e(int_to_bin(u), v) for v in graph[int_to_bin(u)]], deg_constraint)
-       # negative_edges = []
     rest = [e for e in original_edges if e not in positive_edges and e not in negative_edges]
     
     original_signed_edges = [(-1, e) for e in positive_edges] + [(1,e) for e in negative_edges] + [(1,e) for e in rest]
     
-    # for i in range(n):
-    #     permuted_edges = [(flip_i(u, i), flip_i(v, i)) for u, v in original_edges]
-    #     lex_smaller([e(u, v) for u, v in original_edges], [e(u, v) for u, v in permuted_edges], enc)
-      
-    # for i, j in itertools.combinations(range(n), 2):
-    #     permuted_edges = [(swap(i, j, u), swap(i, j, v)) for u, v in original_edges]
-    #     lex_smaller([e(u, v) for u, v in original_edges], [e(u, v) for u, v in permuted_edges], enc)
-        
-    # for (i, j) in itertools.combinations(range(n), 2):
-    #     for k in range(n):
-    #         permuted_edges = [(swap(i, j, flip_i(u, k)), swap(i, j, flip_i(v, k))) for u, v in original_edges]
-    #         lex_smaller([e(u, v) for u, v in original_edges], [e(u, v) for u, v in permuted_edges], enc)
-
-    MAX_COMPARISONS = 150 if n == 8 else 90
+    MAX_COMPARISONS =  70 if n == 8 else 60
     
     cls_pre_sb = enc.n_clauses()
     for i in range(n):
@@ -183,29 +143,27 @@ def encode(n, deg_constraint, cubing_depth):
     print(f"Added {enc.n_clauses() - cls_pre_sb} symmetry breaking clauses")
     
     
-    
     for u in vertices:
         for v in graph[u]:
             for w in vertices:
                 if w in (u, v):
-                    # print("skipping?")
                     continue
                
-                cls = [-e_safe(u, v), -rpath(v,  w), rpath(u, w)]
-                # print(f"Adding clause: {cls}")
-                enc.add_clause(cls)
+                enc.add_clause([-e(u, v), -rpath(v,  w), rpath(u, w)])
                 
-
     for u in vertices:
         enc.add_clause([-rpath(u, anti(u))])
         
     def cube_gen():
+        random.seed(42)
         cubes = []
         edges = []
+        # for u in [vertices[30], vertices[50], vertices[60], vertices[80]]:
         for u in vertices[30:35]:
             for v in graph[u]:
                 if u < v:
                     edges.append((u, v))
+        # random.shuffle(edges)
         edges = edges[:cubing_depth]
         
         edges_lits = []
@@ -223,7 +181,6 @@ def encode(n, deg_constraint, cubing_depth):
                 else:
                     cube.append(-edge_lit)
             cubes.append(cube)
-        random.seed(42)
         random.shuffle(cubes)
         return cubes
         
