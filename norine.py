@@ -6,34 +6,13 @@ import random
 def anti(v):
     return tuple((1 - x) for x in v)
 
-def lex_smaller(seq1, seq2, enc, max_comparisons=float('inf')):
-    """Ensure that seq1 is lexicographically smaller or equal than seq2"""
-    assert len(seq1) == len(seq2)
-    clauses = []
-    v_name = f"_lex_{enc.n_vars()+1}"
-    enc.add_var(v_name)
-    all_previous_equal = enc.v(v_name)
-    clauses.append([all_previous_equal])
-    cnt_supp = 0
-    cnt_skip = 0
-    for i in range(len(seq1)):
-        if cnt_supp >= max_comparisons:
-            break
-            # pass
-        if seq1[i] == seq2[i]:
-            cnt_skip += 1
-            continue
-        clauses.append([-all_previous_equal, -seq1[i], +seq2[i]])  # all previous equal implies seq1[i] <= seq2[i]
-        cnt_supp += 1
-        vname_new = f"_lex_{enc.n_vars()+1}"
-        enc.add_var(vname_new)
-        all_previous_equal_new = enc.v(vname_new)
-        clauses.append([-all_previous_equal, -seq1[i], +all_previous_equal_new])
-        clauses.append([-all_previous_equal, +seq2[i], +all_previous_equal_new])
-        all_previous_equal = all_previous_equal_new
-    # print(f"cnt skip {cnt_skip}, cnt supp {cnt_supp}")
-    
-    enc.add_clauses(clauses)
+def flip_i(v, i):
+    return tuple((1 - x) if j == i else x for j, x in enumerate(v))
+        
+def swap(i, j, v):
+    u = list(v)
+    u[i], u[j] = u[j], u[i]
+    return tuple(u)
     
 def encode(n, deg_constraint, cubing_depth):
     """
@@ -83,19 +62,9 @@ def encode(n, deg_constraint, cubing_depth):
             
     for u in vertices:
         for v in graph[u]:
+            # if edge (u, v) is red, then there is certainly a red path from u to v
             enc.add_clause([-e(u, v), rpath(u, v)])
-            # enc.add_clause([-rpath(u, v), e_safe(u, v)])
             
-    
-    def flip_i(v, i):
-        return tuple((1 - x) if j == i else x for j, x in enumerate(v))
-        
-    def swap(i, j, v):
-        u = list(v)
-        u[i], u[j] = u[j], u[i]
-        return tuple(u)
-    
-   
     original_edges = []
     for u in vertices:
         for v in graph[u]:
@@ -108,7 +77,7 @@ def encode(n, deg_constraint, cubing_depth):
     positive_edges = []
     negative_edges = []
 
-    if deg_constraint >= 0:
+    if deg_constraint is not None and deg_constraint >= 0:
         enc.exactly_k([e(int_to_bin(0), v) for v in graph[int_to_bin(0)]], deg_constraint)
         for u in range(1, 2**n):
             if deg_constraint == 1:
@@ -122,40 +91,38 @@ def encode(n, deg_constraint, cubing_depth):
     
     original_signed_edges = [(-1, e) for e in positive_edges] + [(1,e) for e in negative_edges] + [(1,e) for e in rest]
     
-    MAX_COMPARISONS =  70 if n == 8 else 60
+    MAX_COMPARISONS =  70 if n == 8 else 40
     
     cls_pre_sb = enc.n_clauses()
     for i in range(n):
-        permuted_edges = [ (s,(flip_i(u, i), flip_i(v, i))) for s, (u, v) in original_signed_edges]
-        lex_smaller([s * e(u, v) for s, (u, v) in original_signed_edges], [s * e(u, v) for s, (u, v) in permuted_edges], enc, max_comparisons=MAX_COMPARISONS)
+        permuted_edges = [(s, (flip_i(u, i), flip_i(v, i))) for s, (u, v) in original_signed_edges]
+        enc.lex_less_equal([s * e(u, v) for s, (u, v) in original_signed_edges], [s * e(u, v) for s, (u, v) in permuted_edges])
       
     for i, j in itertools.combinations(range(n), 2):
         permuted_edges = [(s, (swap(i, j, u), swap(i, j, v))) for s, (u, v) in original_signed_edges]
-        lex_smaller([s * e(u, v) for s, (u, v) in original_signed_edges], [s* e(u, v) for s, (u, v) in permuted_edges], enc, max_comparisons=MAX_COMPARISONS)
+        enc.lex_less_equal([s * e(u, v) for s, (u, v) in original_signed_edges], [s* e(u, v) for s, (u, v) in permuted_edges], max_comparisons=MAX_COMPARISONS)
         
     for (i, j) in itertools.combinations(range(n), 2):
         for k in range(n):
             permuted_edges = [(s, (swap(i, j, flip_i(u, k)), swap(i, j, flip_i(v, k)))) for s, (u, v) in original_signed_edges]
-            lex_smaller([s*e(u, v) for s, (u, v) in original_signed_edges], [s* e(u, v) for s, (u, v) in permuted_edges], enc, max_comparisons=MAX_COMPARISONS)
-    
-           
-       
+            enc.lex_less_equal([s*e(u, v) for s, (u, v) in original_signed_edges], [s* e(u, v) for s, (u, v) in permuted_edges], max_comparisons=MAX_COMPARISONS)
     print(f"Added {enc.n_clauses() - cls_pre_sb} symmetry breaking clauses")
     
-    
+    # enforce transitivity of red paths
     for u in vertices:
         for v in graph[u]:
+            # if u > v: continue
             for w in vertices:
                 if w in (u, v):
                     continue
-               
                 enc.add_clause([-e(u, v), -rpath(v,  w), rpath(u, w)])
                 
+    # enforce that no red path exists between antipodal vertices
     for u in vertices:
         enc.add_clause([-rpath(u, anti(u))])
         
     def cube_gen():
-        random.seed(42)
+        random.seed(42) # for shuffling the cubes
         cubes = []
         edges = []
         # for u in [vertices[30], vertices[50], vertices[60], vertices[80]]:
@@ -184,8 +151,8 @@ def encode(n, deg_constraint, cubing_depth):
         random.shuffle(cubes)
         return cubes
         
-    enc.cube_and_conquer(cube_generator=cube_gen, output_file=f"norine_{n}_deg{deg_constraint}_cubing{cubing_depth}.cubes")
-
+    if cubing_depth is not None and cubing_depth > 0:
+        enc.cube_and_conquer(cube_generator=cube_gen, output_file=f"norine_{n}_deg{deg_constraint}_cubing{cubing_depth}.cubes")
     return enc
     
     
@@ -216,17 +183,18 @@ def decode(model, n):
                         print(f"Edge {anti(u)} - {anti(v)} is red")
                     else:
                         print(f"Edge {anti(u)} - {anti(v)} is blue")
-                    
-argparser = argparse.ArgumentParser(description="Norine's conjecture")
-argparser.add_argument("-n", type=int, help="Order of the hypercube graph", required=True)
-argparser.add_argument("-d", type=int, help="Enforces that vertex 0 is of min degree and has degree d", required=True)
-argparser.add_argument("-c", type=int, help="Depth of the cubing (generates 2^c cubes)", required=True)
-N = argparser.parse_args().n
-deg_constraint = argparser.parse_args().d
-cubing_depth = argparser.parse_args().c
-encoding = encode(N, deg_constraint, cubing_depth)
-filename = f"norine_{N}_deg{deg_constraint}_cubing{cubing_depth}.cnf"
-encoding.serialize(filename)
-print(f"Serialized encoding to {filename}")
+
+if __name__ == "__main__":         
+    argparser = argparse.ArgumentParser(description="Norine's conjecture")
+    argparser.add_argument("-n", type=int, help="Order of the hypercube graph", required=True)
+    argparser.add_argument("-d", type=int, help="Enforces that vertex 0 is of min degree and has degree d")
+    argparser.add_argument("-c", type=int, help="Depth of the cubing (generates 2^c cubes)")
+    N = argparser.parse_args().n
+    deg_constraint = argparser.parse_args().d
+    cubing_depth = argparser.parse_args().c
+    encoding = encode(N, deg_constraint, cubing_depth)
+    filename = f"norine_{N}_deg{deg_constraint}.cnf" if deg_constraint is not None else f"norine_{N}_plain.cnf"
+    encoding.serialize(filename)
+    print(f"Serialized encoding to {filename}")
             
     
