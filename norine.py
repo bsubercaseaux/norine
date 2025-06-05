@@ -62,8 +62,9 @@ def encode(n, deg_constraint, cubing_depth):
             
     for u in vertices:
         for v in graph[u]:
+            if u < v:
             # if edge (u, v) is red, then there is certainly a red path from u to v
-            enc.add_clause([-e(u, v), rpath(u, v)])
+                enc.add_clause([-e(u, v), rpath(u, v)])
             
     original_edges = []
     for u in vertices:
@@ -111,14 +112,14 @@ def encode(n, deg_constraint, cubing_depth):
     # enforce transitivity of red paths
     for u in vertices:
         for v in graph[u]:
-            # if u > v: continue
             for w in vertices:
-                if w in (u, v):
-                    continue
+                if u >= w or w == v: continue
                 enc.add_clause([-e(u, v), -rpath(v,  w), rpath(u, w)])
                 
     # enforce that no red path exists between antipodal vertices
     for u in vertices:
+        if u > anti(u):
+            continue
         enc.add_clause([-rpath(u, anti(u))])
         
     def cube_gen():
