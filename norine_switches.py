@@ -133,7 +133,7 @@ def encode(n, sum_upper_bound, fprime=False):
     
 
      ## Symmetry breaking
-    MAX_COMPARISONS = 40
+    MAX_COMPARISONS = 70
 
     cls_pre_sb = enc.n_clauses()
     original_signed_edges = [(1, (u, v)) for u in vertices for v in graph[u] if u < v]
@@ -143,7 +143,7 @@ def encode(n, sum_upper_bound, fprime=False):
       
     for i, j in itertools.combinations(range(n), 2):
         permuted_edges = [(s, (swap(i, j, u), swap(i, j, v))) for s, (u, v) in original_signed_edges]
-        enc.lex_less_equal([s * r(u, v) for s, (u, v) in original_signed_edges], [s * r(u, v) for s, (u, v) in permuted_edges], max_comparisons=MAX_COMPARISONS)
+        enc.lex_less_equal([s * r(u, v) for s, (u, v) in original_signed_edges], [s * r(u, v) for s, (u, v) in permuted_edges], max_comparisons=10000)
         
     for (i, j) in itertools.combinations(range(n), 2):
         for k in range(n):
@@ -151,6 +151,45 @@ def encode(n, sum_upper_bound, fprime=False):
             enc.lex_less_equal([s * r(u, v) for s, (u, v) in original_signed_edges], [s * r(u, v) for s, (u, v) in permuted_edges], max_comparisons=MAX_COMPARISONS)
     print(f"Added {enc.n_clauses() - cls_pre_sb} symmetry breaking clauses")
  
+    cubing_depth = 15
+    def cube_gen():
+        random.seed(42) # for shuffling the cubes
+        cubes = []
+        edges = []
+        for u in [vertices[30], vertices[50], vertices[60], vertices[80]]:
+        # for u in vertices[30:35]:
+            for v in graph[u]:
+                if u < v:
+                    edges.append((u, v))
+        # random.shuffle(edges)
+        edges = edges[:cubing_depth]
+        
+        edges_lits = []
+        for u, v in edges:
+            elit = r(u, v)
+            if -elit in edges_lits:
+                continue
+            edges_lits.append(elit)
+        
+        for edge_vals in itertools.product([0, 1], repeat=len(edges_lits)):
+            cube = []
+            for i, edge_lit in enumerate(edges_lits):
+                if edge_vals[i] == 1:
+                    cube.append(edge_lit)
+                else:
+                    cube.append(-edge_lit)
+            cubes.append(cube)
+        random.shuffle(cubes)
+        return cubes
+        
+    if cubing_depth is not None and cubing_depth > 0:
+        enc.cube_and_conquer(cube_generator=cube_gen, output_file=f"norine_{n}_switches_cubing{cubing_depth}.cubes")
+
+    cubes = cube_gen()
+    random_cube = random.choice(cubes)
+    for l in random_cube:
+        enc.add_clause([l])
+
     return enc
     
 
