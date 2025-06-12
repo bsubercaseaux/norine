@@ -10,17 +10,17 @@
 using namespace std;
 
 // TODO check these two
-#define flipBit(v, i) (v ^ (1 << i)) // flips the i-th bit of v
-#define getBit(v, i) (v & (1 << i))  // get the i-th bit of v
+#define flipBit(v, i) ((v) ^ (1 << (i))) // flips the i-th bit of v
+#define getBit(v, i) (((v) >> (i)) & 1)  // get the i-th bit of v
 #define setBit(v, i, value) \
     {                       \
         if (value)          \
         {                   \
-            v |= (1 << k);  \
+            (v) |= (1 << (i));  \
         }                   \
         else                \
         {                   \
-            v &= ~(1 << k); \
+            (v) &= ~(1 << (i)); \
         }                   \
     }
 
@@ -247,6 +247,11 @@ public:
         if (negated)
             exit(1); // not handled yet
 
+        // printf("Permutation:");
+        // for (auto i: permutationOfDimensions)
+        //     printf(" %d", i);
+        // printf("\n");
+
         vector<int> clause;
 
         // iterate over all edges in the lexicographic order and compare with permuted version
@@ -260,10 +265,12 @@ public:
 
                 // flip bits where v is 1
                 int flipped_u = u ^ v;
+                // printf("Flipped u: %d\n", flipped_u);
                 int perm_flip_u = 0;
                 for (int j = 0; j < k; j++)
                 {
                     setBit(perm_flip_u, j, getBit(flipped_u, permutationOfDimensions[j]));
+                    // printf("Permflip_u after j=%d: %d\n", j, perm_flip_u);
                 }
 
                 // same for u2
@@ -276,6 +283,10 @@ public:
                 if (!negated)
                     if (u == perm_flip_u && u2 == perm_flip_u2)
                         continue; // same edge, skip
+
+                // printf("v: %d\n", v);
+                // printf("u: %d\n", u);
+                // printf("%d %d %d %d\n",perm_flip_u, permutationOfDimensions[i], (int) matrix.size(), (int) matrix[0].size());
 
                 truth_value_t valOriginal = matrix[u][i];
                 truth_value_t valPermuted = matrix[perm_flip_u][permutationOfDimensions[i]];
@@ -349,6 +360,11 @@ int main(int argc, char **argv)
         int vars;
         solver.read_dimacs(argv[3], vars);
     }
+
+    // add observed variables
+    int num_edges = (1<<k) * k /2;
+    for (int i = 1; i <= num_edges;i++)
+        solver.add_observed_var(i);
 
     // add propagator
     NorinePropagator *p = new NorinePropagator(k, f);
