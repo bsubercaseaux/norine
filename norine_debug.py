@@ -186,16 +186,15 @@ def encode(n, sum_upper_bound, fprime=False, deg_constraint=None):
             permuted_edges = [(s, (swap(i, j, flip_i(u, k)), swap(i, j, flip_i(v, k)))) for s, (u, v) in original_signed_edges]
             enc = lex_smaller_eq(enc, vpool, [s * r(u, v) for s, (u, v) in original_signed_edges], [s * r(u, v) for s, (u, v) in permuted_edges], maxcomparisons=MAX_COMPARISONS)
 
-    for P in itertools.permutations(range(n)):
-        for flip_dimensions in itertools.product([0, 1], repeat=n):
-            def permute_and_flip(v):
-                # print(f"Permuting {v} with {P} and flipping {flip_dimensions}")
-                return tuple((v[P[i]] if flip_dimensions[i] == 0 else 1 - v[P[i]] for i in range(n)))
-            permuted_edges = [(s, (permute_and_flip(u), permute_and_flip(v))) for s, (u, v) in original_signed_edges]
-            enc = lex_smaller_eq(enc, vpool, [s * r(u, v) for s, (u, v) in original_signed_edges], [s * r(u, v) for s, (u, v) in permuted_edges], maxcomparisons=MAX_COMPARISONS)
+    if False: # complete symmetry breaking
+        for P in itertools.permutations(range(n)):
+            for flip_dimensions in itertools.product([0, 1], repeat=n):
+                def permute_and_flip(v):
+                    # print(f"Permuting {v} with {P} and flipping {flip_dimensions}")
+                    return tuple((v[P[i]] if flip_dimensions[i] == 0 else 1 - v[P[i]] for i in range(n)))
+                permuted_edges = [(s, (permute_and_flip(u), permute_and_flip(v))) for s, (u, v) in original_signed_edges]
+                enc = lex_smaller_eq(enc, vpool, [s * r(u, v) for s, (u, v) in original_signed_edges], [s * r(u, v) for s, (u, v) in permuted_edges], maxcomparisons=MAX_COMPARISONS)
 
-            # enc.lex_less_equal([s * r(u, v) for s, (u, v) in original_signed_edges], [s * r(u, v) for s, (u, v) in permuted_edges], max_comparisons=MAX_COMPARISONS)
-    # print(f"Added {enc.n_clauses() - cls_pre_sb} symmetry breaking clauses")
 
     print(f"number of clauses: {len(enc.clauses)}")
 
