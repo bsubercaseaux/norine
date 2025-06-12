@@ -6,6 +6,7 @@
 #include <vector>
 #include <cstdlib>
 #include <algorithm>
+#include <string>
 
 using namespace std;
 
@@ -136,6 +137,19 @@ public:
         }
     };
 
+    string vertex_to_string(int v)
+    {
+        string s = "(";
+        for (int i = 0; i < k; i++)
+        {
+            if (i > 0)
+                s += ",";
+            s += to_string(getBit(v, i));
+        }
+        s += ")";
+        return s;
+    }
+
     // print the red edges in python format. The vertices are tuples
     void print_coloring()
     {
@@ -154,24 +168,8 @@ public:
                         printf(",");
                     first = false;
 
-                    printf("(");
-
-                    printf("(");
-                    printf("%d", getBit(v, k - 1));
-                    for (int j = k - 2; j >= 0; j--)
-                        printf(",%d", getBit(v, j));
-                    printf(")");
-
-                    printf(",");
-
                     int u = flipBit(v, i);
-                    printf("(");
-                    printf("%d", getBit(u, k - 1));
-                    for (int j = k - 2; j >= 0; j--)
-                        printf(",%d", getBit(u, j));
-                    printf(")");
-
-                    printf(")");
+                    printf("(%s,%s)", vertex_to_string(v).c_str(), vertex_to_string(u).c_str());
                 }
             }
         printf("]\n");
@@ -263,23 +261,143 @@ public:
     // checks minimality for the current partially defined hypercube coloring
     void checkMinimality()
     {
-        // printf("Start minimality check\n");
-        // simple version going over all flips and permutations naively
-        for (int v = 0; v < (1 << k); v++)
-        {
-            vector<int> dimensions;
-            for (int i = 0; i < k; i++)
-                dimensions.push_back(i);
+        int version = 1;
 
-            do
+        if (version == 0)
+        {
+
+            // printf("Start minimality check\n");
+            // simple version going over all flips and permutations naively
+            for (int v = 0; v < (1 << k); v++)
             {
-                // printf("Testing permutation: ");
-                // for (int i : dimensions)
-                //     printf(" %d", i);
-                // printf("\n");
-                if (!testPermutation(v, dimensions))
-                    return; // already found a suitable clause
-            } while (next_permutation(dimensions.begin(), dimensions.end()));
+                vector<int> dimensions;
+                for (int i = 0; i < k; i++)
+                    dimensions.push_back(i);
+
+                do
+                {
+                    // printf("Testing permutation: ");
+                    // for (int i : dimensions)
+                    //     printf(" %d", i);
+                    // printf("\n");
+                    if (!testPermutation(v, dimensions))
+                        return; // already found a suitable clause
+                } while (next_permutation(dimensions.begin(), dimensions.end()));
+            }
+        }
+
+        // second version using the degrees
+        if (version == 1)
+        {
+            // check if first vertex is fully defined and get degree
+            int degree = 0;
+            for (int i = 0; i < k; i++)
+            {
+                if (matrix[0][i] == truth_value_unknown)
+                    return; // not fully defined
+                if (matrix[0][i] == truth_value_true)
+                    degree++;
+            }
+
+            int numVertices = 1 << k;
+            // guess for vertex
+            for (int v = 0; v < numVertices; v++)
+            {
+                // check if vertex is fully defined
+                bool isFullyDefined = true;
+
+                vector<int> neighbors;
+                vector<int> non_neighbors;
+
+                for (int i = 0; i < k; i++)
+                {
+                    if (matrix[v][i] == truth_value_unknown)
+                    {
+                        isFullyDefined = false;
+                        break; // not fully defined
+                    }
+                    else if (matrix[v][i] == truth_value_true)
+                        neighbors.push_back(i);
+                    else
+                        non_neighbors.push_back(i);
+                }
+
+                if (!isFullyDefined)
+                    continue; // not fully defined
+
+                int degree_v = (int)neighbors.size();         // degree of the vertex
+                int antidegree_v = (int)non_neighbors.size(); // antidegree of the vertex
+
+                if (degree_v < degree)
+                {
+                    vector<int> permutationOfDimensions;
+
+                    for (int i = 0; i < (int)non_neighbors.size(); i++)
+                        permutationOfDimensions.push_back(non_neighbors[i]);
+                    // insert neighbors
+                    for (int i = 0; i < (int)neighbors.size(); i++)
+                        permutationOfDimensions.push_back(neighbors[i]);
+
+                    if (testPermutation(v, permutationOfDimensions))
+                    {
+                        printf("---------------------------------------------\n");
+                        printf("Error: should fail\n");
+                        printf("Current coloring:");
+                        print_coloring();
+                        printf("Degree first vertex: %d\n", degree);
+                        printf("Degree current vertex: %d\n", degree_v);
+                        printf("First vertex: %s\n", vertex_to_string(0).c_str());
+                        printf("Current vertex: %s\n", vertex_to_string(v).c_str());
+
+                        printf("Non neighbors:");
+                        for (auto i : non_neighbors)
+                            printf(" %d", i);
+                        printf("\n");
+
+                        printf("Neighbors:");
+                        for (auto i : neighbors)
+                            printf(" %d", i);
+                        printf("\n");
+
+                        printf("---------------------------------------------\n");
+                        exit(1);
+                    }
+                    return;
+                }
+
+                if (degree_v <= degree)
+                {
+                    // consider all permutations of the neighbors and non neighbors
+                    do
+                    {
+                        do
+                        {
+                            vector<int> permutationOfDimensions;
+                            // insert non_neighbors first
+                            for (int i = 0; i < (int)non_neighbors.size(); i++)
+                                permutationOfDimensions.push_back(non_neighbors[i]);
+                            // insert neighbors
+                            for (int i = 0; i < (int)neighbors.size(); i++)
+                                permutationOfDimensions.push_back(neighbors[i]);
+
+                            testPermutation(v, permutationOfDimensions);
+
+                        } while (std::next_permutation(non_neighbors.begin(), non_neighbors.end()));
+                    } while (std::next_permutation(neighbors.begin(), neighbors.end()));
+
+                    // TODO improvement; also kinda sort non_neighbors by their degree
+                }
+
+                if ((antidegree_v < degree))
+                {
+                    // TODO
+                }
+
+                if (antidegree_v == degree)
+                {
+                    // TODO improvement; also kinda sort non_neighbors by their degree
+                }
+            }
         }
     }
 
@@ -297,8 +415,9 @@ public:
         if (negated)
             exit(1); // not handled yet
 
+        // printf("Flip: %s\n", vertex_to_string(v).c_str());
         // printf("Permutation:");
-        // for (auto i: permutationOfDimensions)
+        // for (auto i : permutationOfDimensions)
         //     printf(" %d", i);
         // printf("\n");
 
@@ -313,25 +432,49 @@ public:
                 if (u2 <= u)            // only consider upper triangular part
                     continue;
 
-                // flip bits where v is 1
-                int flipped_u = u ^ v;
-                // printf("Flipped u: %d\n", flipped_u);
-                int perm_flip_u = 0;
-                for (int j = 0; j < k; j++)
+                int perm_flip_u;
+                int perm_flip_u2;
+
+                if (true)
                 {
-                    setBit(perm_flip_u, j, getBit(flipped_u, permutationOfDimensions[j]));
-                    // printf("Permflip_u after j=%d: %d\n", j, perm_flip_u);
+
+                    int perm_u = 0;
+                    for (int j = 0; j < k; j++)
+                    {
+                        setBit(perm_u, permutationOfDimensions[j], getBit(u, j));
+                    }
+                    perm_flip_u = perm_u ^ v; // flip bits where v is 1
+
+                    // same for u2
+                    // WRONG but don't know why yet: int perm_flip_u2 = flipBit(perm_flip_u, permutationOfDimensions[i]); // TODO check
+
+                    int perm_u2 = 0;
+                    for (int j = 0; j < k; j++)
+                    {
+                        setBit(perm_u2, permutationOfDimensions[j], getBit(u2, j));
+                    }
+                    perm_flip_u2 = perm_u2 ^ v; // flip bits where v is 1
+                }
+                else
+                {
+                    // first flip then permute
+                    int flip_u = u ^ v;
+                    perm_flip_u = 0;
+                    for (int j = 0; j < k; j++)
+                    {
+                        setBit(perm_flip_u, j, getBit(flip_u, permutationOfDimensions[j]));
+                    }
+
+                    int flip_u2 = u2 ^ v;
+                    perm_flip_u2 = 0;
+                    for (int j = 0; j < k; j++)
+                    {
+                        setBit(perm_flip_u2, j, getBit(flip_u2, permutationOfDimensions[j]));
+                    }
                 }
 
-                // same for u2
-                // WRONG but don't know why yet: int perm_flip_u2 = flipBit(perm_flip_u, permutationOfDimensions[i]); // TODO check
-
-                int flip_u2 = u2 ^ v;
-                int perm_flip_u2 = 0;
-                for (int j = 0; j < k; j++)
-                {
-                    setBit(perm_flip_u2, j, getBit(flip_u2, permutationOfDimensions[j]));
-                }
+                // printf("test edge %s %s\n", vertex_to_string(u).c_str(), vertex_to_string(u2).c_str());
+                // printf("vs   edge %s %s\n", vertex_to_string(perm_flip_u).c_str(), vertex_to_string(perm_flip_u2).c_str());
 
                 // swap perm_flip_u and perm_flip_u2 if necessary
                 if (perm_flip_u > perm_flip_u2)
@@ -345,7 +488,7 @@ public:
                 // printf("u: %d\n", u);
                 // printf("%d %d %d %d\n",perm_flip_u, permutationOfDimensions[i], (int) matrix.size(), (int) matrix[0].size());
 
-                 // TODO learn clause
+                // TODO learn clause
                 int edgeOrig = edge_to_variable[u][i];
 
                 // get the bit where they are different
@@ -355,6 +498,11 @@ public:
                         break;
                 if (m == k)
                     exit(1);
+                if (flipBit(perm_flip_u, m) != perm_flip_u2)
+                {
+                    printf("Error\n");
+                    exit(1);
+                }
 
                 int edgePerm = edge_to_variable[perm_flip_u][m]; // TODO check whether this correct
 
@@ -368,8 +516,6 @@ public:
                     else if (valPermuted == truth_value_false)
                         valPermuted = truth_value_true;
                 }
-
-               
 
                 // cases where I can learn a clause
                 if ((valOriginal == truth_value_true && valPermuted != truth_value_true) ||
