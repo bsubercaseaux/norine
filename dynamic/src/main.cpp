@@ -55,6 +55,9 @@ private:
 public:
     int num_solutions = 0;
     int num_learned_clauses = 0;
+    clock_t time_in_minimality = 0;
+    clock_t time_in_propagator = 0;
+    int calls_check = 0;
 
     NorinePropagator(int k, int frequency, bool all_models)
     {
@@ -95,6 +98,7 @@ public:
 
     void notify_assignment(const std::vector<int> &lits)
     {
+        clock_t start = clock();
         for (int lit : lits)
         {
             // printf("Assign lit: %d\n", lit);
@@ -111,6 +115,7 @@ public:
             int u = flipBit(v, i); // TODO check whether correct
             matrix[u][i] = t;
         }
+        time_in_propagator += clock() - start;
     };
 
     void notify_new_decision_level()
@@ -120,6 +125,7 @@ public:
 
     void notify_backtrack(size_t new_level)
     {
+        clock_t start = clock();
         while (trail.size() > new_level + 1)
         {
             auto last = trail.back();
@@ -135,6 +141,8 @@ public:
             }
             trail.pop_back();
         }
+
+        time_in_propagator += clock() - start;
     };
 
     string vertex_to_string(int v)
@@ -209,7 +217,10 @@ public:
 
     bool cb_check_found_model(const std::vector<int> &)
     {
+        clock_t start = clock();
         checkMinimality();
+        time_in_minimality += clock() - start;
+
         if (!clauses.empty())
             return false;
 
@@ -226,6 +237,7 @@ public:
 
     bool cb_has_external_clause(bool &is_forgettable)
     {
+        calls++;
         is_forgettable = false; // TODO maybe also try other version
 
         if (!clauses.empty())
@@ -236,7 +248,10 @@ public:
             calls = 0;
             change_in_trail = false;
 
+            clock_t start = clock();
             checkMinimality();
+            time_in_minimality += clock() - start;
+
             return !clauses.empty();
         }
         return false;
@@ -261,6 +276,7 @@ public:
     // checks minimality for the current partially defined hypercube coloring
     void checkMinimality()
     {
+        calls_check++;
         int version = 1;
 
         if (version == 0)
@@ -598,6 +614,9 @@ int main(int argc, char **argv)
     int res = solver.solve();
     printf("Result from solver: %d\n", res);
     printf("Number of solutions: %d\n", p->num_solutions);
+    printf("Time in minimality check: %f\n", ((double) p->time_in_minimality) / CLOCKS_PER_SEC);
+    printf("Time in propagator: %f\n", ((double) p->time_in_minimality + p->time_in_propagator) / CLOCKS_PER_SEC);
+    printf("Calls of mincheck %d\n", p->calls_check);
     printf("Number of learned clauses: %d\n", p->num_learned_clauses);
     printf("Number of edges: %d\n", num_edges);
     return 0;
