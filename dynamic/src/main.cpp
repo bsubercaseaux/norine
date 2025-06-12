@@ -12,16 +12,16 @@ using namespace std;
 // TODO check these two
 #define flipBit(v, i) ((v) ^ (1 << (i))) // flips the i-th bit of v
 #define getBit(v, i) (((v) >> (i)) & 1)  // get the i-th bit of v
-#define setBit(v, i, value) \
-    {                       \
-        if (value)          \
-        {                   \
+#define setBit(v, i, value)     \
+    {                           \
+        if (value)              \
+        {                       \
             (v) |= (1 << (i));  \
-        }                   \
-        else                \
-        {                   \
+        }                       \
+        else                    \
+        {                       \
             (v) &= ~(1 << (i)); \
-        }                   \
+        }                       \
     }
 
 typedef enum
@@ -35,8 +35,10 @@ class NorinePropagator : public CaDiCaL::ExternalPropagator
 {
 private:
     int k; // dimensions of hypercube
-    int num_edges;
     int frequency;
+    bool all_models;
+
+    int num_edges;
     int calls = 0;
 
     vector<vector<int>> trail;
@@ -50,11 +52,15 @@ private:
     vector<vector<int>> edge_to_variable;    // the inverse
 
 public:
-    NorinePropagator(int k, int frequency)
+    int num_solutions = 0;
+    int num_learned_clauses = 0;
+
+    NorinePropagator(int k, int frequency, bool all_models)
     {
         trail.push_back(vector<int>());
         this->k = k;
         this->frequency = frequency;
+        this->all_models = all_models;
 
         int num_vertices = 1 << k; // 2**k
         this->num_edges = num_vertices * k / 2;
@@ -90,6 +96,7 @@ public:
     {
         for (int lit : lits)
         {
+            printf("Assign lit: %d\n", lit);
             trail.back().push_back(lit);
             change_in_trail = true;
 
@@ -148,18 +155,22 @@ public:
                     first = false;
 
                     printf("(");
+
+                    printf("(");
                     printf("%d", getBit(v, 0));
-                    for (int j = 0; j < k; j++)
+                    for (int j = 1; j < k; j++)
                         printf(",%d", getBit(v, j));
                     printf(")");
 
                     printf(",");
 
-                    int u = flipBit(v,i);
+                    int u = flipBit(v, i);
                     printf("(");
                     printf("%d", getBit(u, 0));
-                    for (int j = 0; j < k; j++)
+                    for (int j = 1; j < k; j++)
                         printf(",%d", getBit(u, j));
+                    printf(")");
+
                     printf(")");
                 }
             }
@@ -169,7 +180,33 @@ public:
     // block the current coloring (for enumeration)
     void block_coloring()
     {
-        // TODO
+        vector<int> clause;
+
+        for (int v = 0; v < (1 << k); v++)
+            for (int i = 0; i < k; i++)
+            {
+                if (getBit(v, i))
+                    continue;
+
+                truth_value_t t = matrix[v][i];
+                int edgeOrig = edge_to_variable[v][i];
+
+                if (t == truth_value_true)
+                {
+                    clause.push_back(-edgeOrig);
+                }
+                else if (t == truth_value_false)
+                {
+                    clause.push_back(edgeOrig);
+                }
+                else
+                {
+                    printf("Error line %d\n", __LINE__);
+                    printf("Edge is undefined: %d %d\n", v, i);
+                    exit(1);
+                }
+            }
+        clauses.push_back(clause);
     }
 
     bool cb_check_found_model(const std::vector<int> &)
@@ -177,6 +214,14 @@ public:
         checkMinimality();
         if (!clauses.empty())
             return false;
+
+        print_coloring();
+        num_solutions++;
+        if (all_models)
+        {
+            block_coloring();
+            return false; // continue enumeration
+        }
 
         return true;
     };
@@ -315,6 +360,7 @@ public:
 
                     // Done
                     clauses.push_back(clause);
+                    num_learned_clauses++;
                     return false;
                 }
 
@@ -346,32 +392,43 @@ int main(int argc, char **argv)
 {
     CaDiCaL::Solver solver = CaDiCaL::Solver();
 
-    if (argc < 3)
+    if (argc < 4)
     {
-        printf("Expected at least 2 argumens dimensions,frequency and evenutally path to encoding");
+        printf("Expected at least 3 argumens dimensions,frequency,all and evenutally path to encoding");
         exit(1);
     }
 
     int k = atoi(argv[1]);
     int f = atoi(argv[2]);
+    int a = atoi(argv[3]);
 
-    if (argc > 3)
+    if (argc > 4)
     {
         int vars;
-        solver.read_dimacs(argv[3], vars);
+        solver.read_dimacs(argv[4], vars);
     }
 
-    // add observed variables
-    int num_edges = (1<<k) * k /2;
-    for (int i = 1; i <= num_edges;i++)
-        solver.add_observed_var(i);
+    
 
     // add propagator
-    NorinePropagator *p = new NorinePropagator(k, f);
+    NorinePropagator *p = new NorinePropagator(k, f, a > 0);
     solver.connect_external_propagator(p);
+
+    // add observed variables
+    int num_edges = (1 << k) * k / 2;
+    for (int i = 1; i <= num_edges; i++)
+    {
+        solver.add_observed_var(i);
+        // solver.add(i);
+        // solver.add(0);
+    }
+
+
+
 
     int res = solver.solve();
     printf("Result from solver: %d\n", res);
-
+    printf("Number of solutions: %d\n", p->num_solutions);
+    printf("Number of learned clauses: %d\n", p->num_learned_clauses);
     return 0;
 }
