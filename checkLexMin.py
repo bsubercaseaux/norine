@@ -29,15 +29,37 @@ def checkLexMin(red_edges, n, plusNegated=False):
     for perm_dimensions in itertools.permutations(range(n)):
         for flip_dimensions in itertools.product([0, 1], repeat=n):
 
+            # def permute_and_flip(v):
+            #     # print(f"Permuting {v} with {perm_dimensions} and flipping {flip_dimensions}")
+            #     return tuple((v[perm_dimensions[i]] if flip_dimensions[i] == 0 else 1 - v[perm_dimensions[i]] for i in range(n)))
+            
+
             def permute_and_flip(v):
                 # print(f"Permuting {v} with {perm_dimensions} and flipping {flip_dimensions}")
-                return tuple((v[perm_dimensions[i]] if flip_dimensions[i] == 0 else 1 - v[perm_dimensions[i]] for i in range(n)))
+
+                v_perm = [v[perm_dimensions[i]] for i in range(n)]
+
+                # flip
+                v_perm_flip = [v_perm[i] if flip_dimensions[i] == 0 else 1 - v_perm[i] for i in range(n)]
+                return tuple(v_perm_flip)
             
-            permuted_edges = [(permute_and_flip(u), permute_and_flip(v)) for u,v in red_edges]
-            permuted_edges_seq = edges_to_sequence(permuted_edges)
+            permuted_ordering = [(permute_and_flip(u), permute_and_flip(v)) for u,v in original_edges]
+            # permuted_edges = [(permute_and_flip(u), permute_and_flip(v)) for u,v in red_edges]
+            # permuted_edges_seq = edges_to_sequence(permuted_edges)
+            permuted_edges_seq = [1 if (u,v) in red_edges or (v,u) in red_edges else 0 for u,v in permuted_ordering]
 
 
             if permuted_edges_seq < original_edges_seq:
+                print("Original edge ordering:", str(original_edges).replace(" ", ""))
+                print("Permuted edge ordering:", str([(permute_and_flip(u), permute_and_flip(v)) for u,v in original_edges]).replace(" ", ""))
+
+                print("First index where different", min([i for i in range(len(permuted_edges_seq)) if original_edges_seq[i] > permuted_edges_seq[i]]))
+
+                print("Orig seq:", original_edges_seq)
+                print("Perm seq:", permuted_edges_seq)
+
+                print("Witness permutation:", perm_dimensions)
+                print("Witness flip:", flip_dimensions)
                 return False
             
             if plusNegated:
@@ -52,7 +74,7 @@ def checkFirstVertexMindegree(red_edges):
 
     counts = {u: sum(1 for v in elements if v == u) for u in unique_elements}
 
-    print(counts)
+    # print(counts)
 
     for u in counts:
         assert (0,0,0) not in counts or  counts[u] >= counts[(0,0,0)]
@@ -80,12 +102,13 @@ with open("./dynamic/asdf", "r") as f:
     for line in f:
         if line.startswith("["):
             red_edges = eval(line.strip())
-            print(red_edges)
+            # print(red_edges)
             if checkLexMin(red_edges, n, plusNegated=False):
-                print("YES")
+                # print("YES")
                 count_min += 1
             else:
                 print("NO")
+                print(str(red_edges).replace(" ", ""))
 
             checkFirstVertexMindegree(red_edges)
 
