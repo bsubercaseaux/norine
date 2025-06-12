@@ -396,7 +396,8 @@ public:
                             for (int i = 0; i < (int)neighbors.size(); i++)
                                 permutationOfDimensions.push_back(neighbors[i]);
 
-                            testPermutation(v, permutationOfDimensions);
+                            if (!testPermutation(v, permutationOfDimensions))
+                                return;
 
                         } while (std::next_permutation(non_neighbors.begin(), non_neighbors.end()));
                     } while (std::next_permutation(neighbors.begin(), neighbors.end()));
@@ -406,11 +407,42 @@ public:
 
                 if ((antidegree_v < degree))
                 {
-                    // TODO
+                    vector<int> permutationOfDimensions;
+
+                    // insert neighbors first
+                    for (int i = 0; i < (int)neighbors.size(); i++)
+                        permutationOfDimensions.push_back(neighbors[i]);
+                    for (int i = 0; i < (int)non_neighbors.size(); i++)
+                        permutationOfDimensions.push_back(non_neighbors[i]);
+
+                    if (testPermutation(v, permutationOfDimensions, true))
+                    {
+                        printf("---------------------------------------------\n");
+                        printf("Error: should fail\n");
+                        exit(1);
+                    }
+                    return;
                 }
 
                 if (antidegree_v == degree)
                 {
+                    do
+                    {
+                        do
+                        {
+                            vector<int> permutationOfDimensions;
+                            // insert neighbors
+                            for (int i = 0; i < (int)neighbors.size(); i++)
+                                permutationOfDimensions.push_back(neighbors[i]);
+                            // insert non_neighbors first
+                            for (int i = 0; i < (int)non_neighbors.size(); i++)
+                                permutationOfDimensions.push_back(non_neighbors[i]);
+
+                            if (!testPermutation(v, permutationOfDimensions, true))
+                                return;
+
+                        } while (std::next_permutation(non_neighbors.begin(), non_neighbors.end()));
+                    } while (std::next_permutation(neighbors.begin(), neighbors.end()));
                     // TODO improvement; also kinda sort non_neighbors by their degree
                 }
             }
@@ -428,8 +460,6 @@ public:
      */
     bool testPermutation(int v, const vector<int> &permutationOfDimensions, bool negated = false)
     {
-        if (negated)
-            exit(1); // not handled yet
 
         // printf("Flip: %s\n", vertex_to_string(v).c_str());
         // printf("Permutation:");
@@ -614,8 +644,8 @@ int main(int argc, char **argv)
     int res = solver.solve();
     printf("Result from solver: %d\n", res);
     printf("Number of solutions: %d\n", p->num_solutions);
-    printf("Time in minimality check: %f\n", ((double) p->time_in_minimality) / CLOCKS_PER_SEC);
-    printf("Time in propagator: %f\n", ((double) p->time_in_minimality + p->time_in_propagator) / CLOCKS_PER_SEC);
+    printf("Time in minimality check: %f\n", ((double)p->time_in_minimality) / CLOCKS_PER_SEC);
+    printf("Time in propagator: %f\n", ((double)p->time_in_minimality + p->time_in_propagator) / CLOCKS_PER_SEC);
     printf("Calls of mincheck %d\n", p->calls_check);
     printf("Number of learned clauses: %d\n", p->num_learned_clauses);
     printf("Number of edges: %d\n", num_edges);
