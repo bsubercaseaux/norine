@@ -96,7 +96,7 @@ public:
     {
         for (int lit : lits)
         {
-            printf("Assign lit: %d\n", lit);
+            // printf("Assign lit: %d\n", lit);
             trail.back().push_back(lit);
             change_in_trail = true;
 
@@ -157,8 +157,8 @@ public:
                     printf("(");
 
                     printf("(");
-                    printf("%d", getBit(v, 0));
-                    for (int j = 1; j < k; j++)
+                    printf("%d", getBit(v, k - 1));
+                    for (int j = k - 2; j >= 0; j--)
                         printf(",%d", getBit(v, j));
                     printf(")");
 
@@ -166,8 +166,8 @@ public:
 
                     int u = flipBit(v, i);
                     printf("(");
-                    printf("%d", getBit(u, 0));
-                    for (int j = 1; j < k; j++)
+                    printf("%d", getBit(u, k - 1));
+                    for (int j = k - 2; j >= 0; j--)
                         printf(",%d", getBit(u, j));
                     printf(")");
 
@@ -263,6 +263,7 @@ public:
     // checks minimality for the current partially defined hypercube coloring
     void checkMinimality()
     {
+        // printf("Start minimality check\n");
         // simple version going over all flips and permutations naively
         for (int v = 0; v < (1 << k); v++)
         {
@@ -272,6 +273,10 @@ public:
 
             do
             {
+                // printf("Testing permutation: ");
+                // for (int i : dimensions)
+                //     printf(" %d", i);
+                // printf("\n");
                 if (!testPermutation(v, dimensions))
                     return; // already found a suitable clause
             } while (next_permutation(dimensions.begin(), dimensions.end()));
@@ -283,7 +288,7 @@ public:
      *
      *
      * @param v The vertex which is mapped to (0,..,0). Gives the flips of the dimensions
-     * @param permutationOfDimensions A permutation of the dimensions
+     * @param permutationOfDimensions A permutation of the dimensions; permutationOfDimensions[0] gives the value mapped to 0
      * @param negated Whether the coloring should additionally be swapped
      * @return false if it can already be concluded that it is not minimal, true otherwise
      */
@@ -319,7 +324,14 @@ public:
                 }
 
                 // same for u2
-                int perm_flip_u2 = flipBit(perm_flip_u, permutationOfDimensions[i]); // TODO check
+                // WRONG but don't know why yet: int perm_flip_u2 = flipBit(perm_flip_u, permutationOfDimensions[i]); // TODO check
+
+                int flip_u2 = u2 ^ v;
+                int perm_flip_u2 = 0;
+                for (int j = 0; j < k; j++)
+                {
+                    setBit(perm_flip_u2, j, getBit(flip_u2, permutationOfDimensions[j]));
+                }
 
                 // swap perm_flip_u and perm_flip_u2 if necessary
                 if (perm_flip_u > perm_flip_u2)
@@ -333,8 +345,21 @@ public:
                 // printf("u: %d\n", u);
                 // printf("%d %d %d %d\n",perm_flip_u, permutationOfDimensions[i], (int) matrix.size(), (int) matrix[0].size());
 
+                 // TODO learn clause
+                int edgeOrig = edge_to_variable[u][i];
+
+                // get the bit where they are different
+                int m = 0;
+                for (; m < k; m++)
+                    if (getBit(perm_flip_u, m) != getBit(perm_flip_u2, m))
+                        break;
+                if (m == k)
+                    exit(1);
+
+                int edgePerm = edge_to_variable[perm_flip_u][m]; // TODO check whether this correct
+
                 truth_value_t valOriginal = matrix[u][i];
-                truth_value_t valPermuted = matrix[perm_flip_u][permutationOfDimensions[i]];
+                truth_value_t valPermuted = matrix[perm_flip_u][m];
 
                 if (negated)
                 {
@@ -344,23 +369,27 @@ public:
                         valPermuted = truth_value_true;
                 }
 
+               
+
                 // cases where I can learn a clause
                 if ((valOriginal == truth_value_true && valPermuted != truth_value_true) ||
                     (valOriginal != truth_value_false && valPermuted == truth_value_false))
                 {
-                    // TODO learn clause
-                    int edgeOrig = edge_to_variable[u][i];
-
-                    int edgePerm = edge_to_variable[perm_flip_u][permutationOfDimensions[i]]; // TODO check whether this correct
-                    if (negated)
-                        edgePerm = -edgePerm;
 
                     clause.push_back(-edgeOrig);
-                    clause.push_back(edgePerm); // TODO check whether this correct
+                    if (!negated)
+                        clause.push_back(edgePerm); // TODO check whether this correct
+                    else
+                        clause.push_back(-edgePerm);
 
                     // Done
                     clauses.push_back(clause);
                     num_learned_clauses++;
+
+                    // printf("Symmetry breaking clause: ");
+                    // for (auto lit: clause)
+                    //     printf(" %d", lit);
+                    // printf("\n");
                     return false;
                 }
 
@@ -373,11 +402,10 @@ public:
 
                 if (valPermuted == truth_value_false)
                 {
-                    int edgePerm = edge_to_variable[perm_flip_u][permutationOfDimensions[i]]; // TODO check whether this correct
-                    if (negated)
-                        edgePerm = -edgePerm;
-
-                    clause.push_back(edgePerm);
+                    if (!negated)
+                        clause.push_back(edgePerm);
+                    else
+                        clause.push_back(-edgePerm);
                     continue;
                 }
 
@@ -408,8 +436,6 @@ int main(int argc, char **argv)
         solver.read_dimacs(argv[4], vars);
     }
 
-    
-
     // add propagator
     NorinePropagator *p = new NorinePropagator(k, f, a > 0);
     solver.connect_external_propagator(p);
@@ -423,12 +449,10 @@ int main(int argc, char **argv)
         // solver.add(0);
     }
 
-
-
-
     int res = solver.solve();
     printf("Result from solver: %d\n", res);
     printf("Number of solutions: %d\n", p->num_solutions);
     printf("Number of learned clauses: %d\n", p->num_learned_clauses);
+    printf("Number of edges: %d\n", num_edges);
     return 0;
 }
