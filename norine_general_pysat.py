@@ -48,7 +48,17 @@ def swap(i, j, v):
     return tuple(u)
 
 
-def encode(n, sum_upper_bound, antipodal=False, fprime=False, deg_constraint=None, partial_sym_break=None, maximum_degree=None, conjecture3=False):
+def encode(
+    n,
+    sum_upper_bound,
+    antipodal=False,
+    fprime=False,
+    deg_constraint=None,
+    partial_sym_break=None,
+    maximum_degree=None,
+    conjecture3=False,
+    card_type=1,
+):
     """
     Encoding from Section 6 of the Overleaf
     """
@@ -171,7 +181,7 @@ def encode(n, sum_upper_bound, antipodal=False, fprime=False, deg_constraint=Non
                         for s in S:
                             sum_vars.append(-pt(u, s))
 
-                enc.extend(CardEnc.atleast(sum_vars, bound=sum_upper_bound, vpool=vpool, encoding=CARDINALITY_ENCODING))
+                enc.extend(CardEnc.atleast(sum_vars, bound=sum_upper_bound, vpool=vpool, encoding=card_type))
                 # enc.at_least_k(sum_vars, sum_upper_bound)
             else:
                 sum_vars = []
@@ -179,7 +189,7 @@ def encode(n, sum_upper_bound, antipodal=False, fprime=False, deg_constraint=Non
                     if u < anti(u):
                         for s in [-1] + S:
                             sum_vars.append(-pt(u, s))
-                enc.extend(CardEnc.atleast(sum_vars, bound=sum_upper_bound + (len(vertices) // 2), vpool=vpool, encoding=CARDINALITY_ENCODING))
+                enc.extend(CardEnc.atleast(sum_vars, bound=sum_upper_bound + (len(vertices) // 2), vpool=vpool, encoding=card_type))
                 # enc.at_least_k(sum_vars, sum_upper_bound + (len(vertices) // 2))
 
         if conjecture3:
@@ -294,7 +304,7 @@ def checkLexMin(red_edges, n, plusNegated=False):
                 return False
 
             if plusNegated:
-                if (not permuted_edges_seq) < original_edges_seq:
+                if [(1 - i) for i in permuted_edges_seq] < original_edges_seq:
                     return False
     return True
 
@@ -353,6 +363,9 @@ if __name__ == "__main__":
         help="Check conjecture 3, i.e., whether there is a vertex pairs such that monochromatic geodesic or at most one swap with starting with either color",
     )
 
+    argparser.add_argument("--cardinality-contraint", type=int, help="Type of cardinality constraint to use in pysat (1 is sequential)", default=1)
+    argparser.add_argument("--no-solve", action="store_true", help="Do not use solver, just create the encoding")
+
     argparser.add_argument("--maximum-degree", type=int, help="Ensure that the first vertex has at most the given degree")
 
     args = argparser.parse_args()
@@ -366,16 +379,19 @@ if __name__ == "__main__":
         partial_sym_break=args.partial_sym_break,
         maximum_degree=args.maximum_degree,
         conjecture3=args.conjecture3,
+        card_type=args.cardinality_contraint,
     )
 
     # encoding.to_file(f"norine_switches_pysat_{N}_{args.b}.cnf")
+    tmp_file = f"norine_tmp.cnf"
+    if args.no_solve:
+        encoding.to_file(tmp_file)
+        exit()
 
     # create solver and enumerate all solutions
 
     if not args.use_pysat_solver:
-        pass
         # use SMS for solving
-        tmp_file = f"norine_tmp.cnf"
         frequency = 30
         cmd = f"time ./dynamic/build/src/norine {N} {frequency} {1 if args.all else 0} {tmp_file}"
 
