@@ -11,7 +11,7 @@ from pysat.formula import *
 from pysat.solvers import Solver
 from pysat.card import CardEnc
 
-CARDINALITY_ENCODING = 7  # selected pysat encoding for cardinality constraints
+CARDINALITY_ENCODING = 1  # selected pysat encoding for cardinality constraints
 
 
 def lex_smaller_eq(enc, vpool, seq1, seq2, maxcomparisons=None):
@@ -48,7 +48,7 @@ def swap(i, j, v):
     return tuple(u)
 
 
-def encode(n, sum_upper_bound, antipodal=False, fprime=False, deg_constraint=None, partial_sym_break=None):
+def encode(n, sum_upper_bound, antipodal=False, fprime=False, deg_constraint=None, partial_sym_break=None, maximum_degree=None, conjecture3=False):
     """
     Encoding from Section 6 of the Overleaf
     """
@@ -94,6 +94,13 @@ def encode(n, sum_upper_bound, antipodal=False, fprime=False, deg_constraint=Non
         return sum(1 for i in range(len(u)) if u[i] != v[i])
         # return sum(u[i] != v[i] for i in range(len(u)))
 
+    S = []
+    if sum_upper_bound:
+        S = list(range(n))
+
+    if conjecture3:
+        S = [0, 1]
+
     if True:
         # Eq 4, 5:
         for u in vertices:
@@ -112,7 +119,7 @@ def encode(n, sum_upper_bound, antipodal=False, fprime=False, deg_constraint=Non
                     continue
                 for v in graph[w]:
                     if dist(u, v) + 1 == dist(u, w):
-                        for s in range(n):
+                        for s in S:
                             # Eq 6.
                             enc.append([-pc("red", u, v, s), -r(v, w), pc("red", u, w, s)])
                             # Eq 7.
@@ -133,8 +140,9 @@ def encode(n, sum_upper_bound, antipodal=False, fprime=False, deg_constraint=Non
                 if u == v:
                     continue
                 for color in colors:
-                    for s in range(n - 1):
-                        enc.append([-pc(color, u, v, s), pc(color, u, v, s + 1)])
+                    for s in S:
+                        if s < max(S):
+                            enc.append([-pc(color, u, v, s), pc(color, u, v, s + 1)])
 
         # Eq 11.
         for u in vertices:
@@ -151,7 +159,7 @@ def encode(n, sum_upper_bound, antipodal=False, fprime=False, deg_constraint=Non
                 if u > anti(u):
                     continue
                 # enc.add_var(f"p^t_{u, -1}")
-                for s in range(n):
+                for s in S:
                     enc.append([-pc("red", u, anti(u), s), -pc("blue", u, anti(u), s), pt(u, s - 1)])
 
         if sum_upper_bound:
@@ -160,7 +168,7 @@ def encode(n, sum_upper_bound, antipodal=False, fprime=False, deg_constraint=Non
                 sum_vars = []
                 for u in vertices:
                     if u < anti(u):
-                        for s in range(n):
+                        for s in S:
                             sum_vars.append(-pt(u, s))
 
                 enc.extend(CardEnc.atleast(sum_vars, bound=sum_upper_bound, vpool=vpool, encoding=CARDINALITY_ENCODING))
@@ -169,10 +177,19 @@ def encode(n, sum_upper_bound, antipodal=False, fprime=False, deg_constraint=Non
                 sum_vars = []
                 for u in vertices:
                     if u < anti(u):
-                        for s in range(-1, n):
+                        for s in [-1] + S:
                             sum_vars.append(-pt(u, s))
                 enc.extend(CardEnc.atleast(sum_vars, bound=sum_upper_bound + (len(vertices) // 2), vpool=vpool, encoding=CARDINALITY_ENCODING))
                 # enc.at_least_k(sum_vars, sum_upper_bound + (len(vertices) // 2))
+
+        if conjecture3:
+            for u in vertices:
+                if u > anti(u):
+                    continue
+                # no monochromatic geodesic
+                enc.append([-pc("red", u, anti(u), 0)])
+                enc.append([-pc("blue", u, anti(u), 0)])
+                enc.append([-pc("red", u, anti(u), 1), -pc("blue", u, anti(u), 1)])
 
     print(f"number of clauses: {len(enc.clauses)}")
 
@@ -224,6 +241,19 @@ def encode(n, sum_upper_bound, antipodal=False, fprime=False, deg_constraint=Non
                         [s * r(u, v) for s, (u, v) in permuted_edges],
                         maxcomparisons=MAX_COMPARISONS,
                     )
+
+    print(f"number of clauses: {len(enc.clauses)}")
+
+    if maximum_degree is not None:
+        # Just for the first vertex, rest by symmetry
+        enc.extend(
+            CardEnc.atmost(
+                [r(vertices[0], v) for v in graph[vertices[0]]],
+                bound=maximum_degree,
+                vpool=vpool,
+                encoding=CARDINALITY_ENCODING,
+            )
+        )
 
     print(f"number of clauses: {len(enc.clauses)}")
 
@@ -309,19 +339,34 @@ if __name__ == "__main__":
     argparser.add_argument("--partial-sym-break", type=int, help="Max comparisons for partial symbreak", default=20)
     argparser.add_argument("--antipodal-coloring", action="store_true", help="Enforce that the coloring is antipodal")
 
-    argparser.add_argument("--geodesic", action="store_true", help="Check geodesic version")  # TODO
     argparser.add_argument("--path", action="store_true", help="Allow general paths not only geodesics")  # TODO
+
+    argparser.add_argument("-b", type=int, help="Upper bound on f function or f'")
+    argparser.add_argument("-p", "--fprime", action="store_true", help="Use f' instead of f, i.e., primed version")
+    argparser.add_argument("-b2", type=int, help="Upperbound on bad antipodal pairs")  # TODO
     argparser.add_argument(
         "--check-conjecture", action="store_true", help="Check conjecture, i.e., whether a variant of the Conjecture holds for the given parameters"
     )  # TODO
+    argparser.add_argument(
+        "--conjecture3",
+        action="store_true",
+        help="Check conjecture 3, i.e., whether there is a vertex pairs such that monochromatic geodesic or at most one swap with starting with either color",
+    )
 
-    argparser.add_argument("-b", type=int, help="Upper bound")
-    argparser.add_argument("-p", "--fprime", action="store_true", help="Use f' instead of f, i.e., primed version")
+    argparser.add_argument("--maximum-degree", type=int, help="Ensure that the first vertex has at most the given degree")
 
     args = argparser.parse_args()
     N = args.n
 
-    encoding, var_to_edge = encode(N, args.b, antipodal=args.antipodal_coloring, fprime=args.fprime, partial_sym_break=args.partial_sym_break)
+    encoding, var_to_edge = encode(
+        N,
+        args.b,
+        antipodal=args.antipodal_coloring,
+        fprime=args.fprime,
+        partial_sym_break=args.partial_sym_break,
+        maximum_degree=args.maximum_degree,
+        conjecture3=args.conjecture3,
+    )
 
     # encoding.to_file(f"norine_switches_pysat_{N}_{args.b}.cnf")
 
