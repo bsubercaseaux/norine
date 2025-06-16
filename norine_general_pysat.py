@@ -11,7 +11,7 @@ from pysat.formula import *
 from pysat.solvers import Solver
 from pysat.card import CardEnc
 
-CARDINALITY_ENCODING = 1  # selected pysat encoding for cardinality constraints
+DEFAULT_CARDINALITY_ENCODING = 1  # selected pysat encoding for cardinality constraints
 
 
 def lex_smaller_eq(enc, vpool, seq1, seq2, maxcomparisons=None):
@@ -58,6 +58,7 @@ def encode(
     maximum_degree=None,
     conjecture3=False,
     card_type=1,
+    path_version=False,
 ):
     """
     Encoding from Section 6 of the Overleaf
@@ -92,6 +93,7 @@ def encode(
             for v in graph[u]:
                 if v < u:
                     continue
+                # just for SMS
                 enc.append([-r(u, v), -r(anti(u), anti(v))])
                 enc.append([r(u, v), r(anti(u), anti(v))])
 
@@ -128,7 +130,8 @@ def encode(
                 if w in graph[u]:
                     continue
                 for v in graph[w]:
-                    if dist(u, v) + 1 == dist(u, w):
+
+                    if path_version or dist(u, v) + 1 == dist(u, w):
                         for s in S:
                             # Eq 6.
                             enc.append([-pc("red", u, v, s), -r(v, w), pc("red", u, w, s)])
@@ -261,7 +264,7 @@ def encode(
                 [r(vertices[0], v) for v in graph[vertices[0]]],
                 bound=maximum_degree,
                 vpool=vpool,
-                encoding=CARDINALITY_ENCODING,
+                encoding=card_type,
             )
         )
 
@@ -363,10 +366,16 @@ if __name__ == "__main__":
         help="Check conjecture 3, i.e., whether there is a vertex pairs such that monochromatic geodesic or at most one swap with starting with either color",
     )
 
-    argparser.add_argument("--cardinality-contraint", type=int, help="Type of cardinality constraint to use in pysat (1 is sequential)", default=1)
+    argparser.add_argument(
+        "--cardinality-contraint",
+        type=int,
+        help="Type of cardinality constraint to use in pysat (1 is sequential)",
+        default=DEFAULT_CARDINALITY_ENCODING,
+    )
     argparser.add_argument("--no-solve", action="store_true", help="Do not use solver, just create the encoding")
 
     argparser.add_argument("--maximum-degree", type=int, help="Ensure that the first vertex has at most the given degree")
+    argparser.add_argument("--tmp-file", type=str, help="Temporary file to store the encoding", default="norine_tmp.cnf")
 
     args = argparser.parse_args()
     N = args.n
@@ -380,10 +389,11 @@ if __name__ == "__main__":
         maximum_degree=args.maximum_degree,
         conjecture3=args.conjecture3,
         card_type=args.cardinality_contraint,
+        path_version=args.path,
     )
 
     # encoding.to_file(f"norine_switches_pysat_{N}_{args.b}.cnf")
-    tmp_file = f"norine_tmp.cnf"
+    tmp_file = args.tmp_file
     if args.no_solve:
         encoding.to_file(tmp_file)
         exit()
