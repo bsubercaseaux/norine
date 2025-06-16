@@ -62,6 +62,7 @@ def encode(
     card_type=1,
     path_version=False,
     b2=None,
+    b3=None,
 ):
     """
     Encoding from Section 6 of the Overleaf
@@ -123,13 +124,18 @@ def encode(
 
     S = []
     if sum_upper_bound:
-        S = list(range(n))
+        S.extend(list(range(n)))
     if conjecture1:
-        S = [0]
+        S.append(0)  # at least one monochromatic geodesic
     if conjecture3 or conjecture2:
-        S = [0, 1]
+        S.extend([0, 1])
     if b2 is not None:
-        S = [0, 1, 2]
+        S.extend([0, 1, 2])
+
+    if b3:
+        S.append(0)
+
+    S = sorted(list(set(S)))
 
     if True:
 
@@ -248,6 +254,12 @@ def encode(
 
     if b2:
         enc.extend(CardEnc.atleast([-pt(u, 1) for u in vertices if u < anti(u)], bound=b2, vpool=vpool, encoding=card_type))
+
+    if b3:
+        # print(f"number of clauses: {len(enc.clauses)} asdf")
+        assert  len([-pt(u, 0) for u in vertices if u < anti(u)]) <= b3, "b3 must be larger than the number of antipodal pairs otherwise pysat fails"
+        enc.extend(CardEnc.atleast([-pt(u, 0) for u in vertices if u < anti(u)], bound=b3, vpool=vpool, encoding=card_type))
+        # print(f"number of clauses: {len(enc.clauses)}")
 
     print(f"number of clauses: {len(enc.clauses)}")
 
@@ -401,7 +413,8 @@ if __name__ == "__main__":
 
     argparser.add_argument("-b", type=int, help="Upper bound on f function or f'")
     argparser.add_argument("-p", "--fprime", action="store_true", help="Use f' instead of f, i.e., primed version")
-    argparser.add_argument("-b2", type=int, help="Upperbound on bad antipodal pairs, i.e., strictly more than one swap")  # TODO
+    argparser.add_argument("-b2", type=int, help="Upperbound on bad antipodal pairs, i.e., strictly more than one swap")
+    argparser.add_argument("-b3", type=int, help="Upperbound on slightly bad antipodal pairs, i.e., more than zero swaps")
 
     argparser.add_argument("--conjecture1", action="store_true", help="Vertex pair reachable over monochromatic geodesic/path")
     argparser.add_argument("--conjecture2", action="store_true", help="Vertex pair reachable with at most one swap")
@@ -439,6 +452,7 @@ if __name__ == "__main__":
         card_type=args.cardinality_contraint,
         path_version=args.path,
         b2=args.b2,
+        b3=args.b3,
     )
 
     # encoding.to_file(f"norine_switches_pysat_{N}_{args.b}.cnf")
