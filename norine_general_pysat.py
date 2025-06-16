@@ -56,6 +56,7 @@ def encode(
     deg_constraint=None,
     partial_sym_break=None,
     maximum_degree=None,
+    conjecture1=False,
     conjecture3=False,
     card_type=1,
     path_version=False,
@@ -97,6 +98,17 @@ def encode(
                 enc.append([-r(u, v), -r(anti(u), anti(v))])
                 enc.append([r(u, v), r(anti(u), anti(v))])
 
+        r_old = r
+        def r_new(u, v):
+            if v < u:
+                u, v = v, u
+            if u < anti(u):
+                return r_old(u, v)
+            else:
+                return -r_old(anti(u), anti(v))
+
+        r = r_new
+
     colors = ["red", "blue"]
 
     pc = lambda color, u, v, s: vpool.id(f"p^{color}_{u, v, s}")
@@ -110,17 +122,24 @@ def encode(
     if sum_upper_bound:
         S = list(range(n))
 
+    if conjecture1:
+        S = [0]
+
     if conjecture3:
         S = [0, 1]
 
     if True:
+
+        assert S != [], "S must not be empty"
         # Eq 4, 5:
         for u in vertices:
             if u > anti(u):
                 continue
             for v in graph[u]:
                 enc.append([-r(u, v), pc("red", u, v, 0)])
-                enc.append([r(u, v), pc("blue", u, v, 0)])
+
+                if not (antipodal and S == [0]):
+                    enc.append([r(u, v), pc("blue", u, v, 0)])
 
         # Eq 6, 7, 8, 9
         for u in vertices:
@@ -136,14 +155,16 @@ def encode(
                             # Eq 6.
                             enc.append([-pc("red", u, v, s), -r(v, w), pc("red", u, w, s)])
                             # Eq 7.
-                            enc.append([-pc("blue", u, v, s), r(v, w), pc("blue", u, w, s)])
+                            if not (antipodal and S == [0]):
+                                enc.append([-pc("blue", u, v, s), r(v, w), pc("blue", u, w, s)])
 
                             if s < n - 1:
                                 # Eq 8.
                                 enc.append([-pc("red", u, v, s), r(v, w), pc("blue", u, w, s + 1)])
 
                                 # Eq 9.
-                                enc.append([-pc("blue", u, v, s), -r(v, w), pc("red", u, w, s + 1)])
+                                if not (antipodal and S == [0]):
+                                    enc.append([-pc("blue", u, v, s), -r(v, w), pc("red", u, w, s + 1)])
 
         # Eq 10.
         for u in vertices:
@@ -158,14 +179,15 @@ def encode(
                             enc.append([-pc(color, u, v, s), pc(color, u, v, s + 1)])
 
         # Eq 11.
-        for u in vertices:
-            if u > anti(u):
-                continue
-            for s in range(n):
-                # enc.add_var(f"p^t_{u, s}")
-                for color in colors:
-                    enc.append([-pc("red", u, anti(u), s), pt(u, s)])
-                    enc.append([-pc("blue", u, anti(u), s), pt(u, s)])
+        if sum_upper_bound:
+            for u in vertices:
+                if u > anti(u):
+                    continue
+                for s in range(n):
+                    # enc.add_var(f"p^t_{u, s}")
+                    for color in colors:
+                        enc.append([-pc("red", u, anti(u), s), pt(u, s)])
+                        enc.append([-pc("blue", u, anti(u), s), pt(u, s)])
 
         if fprime:
             for u in vertices:
@@ -195,14 +217,21 @@ def encode(
                 enc.extend(CardEnc.atleast(sum_vars, bound=sum_upper_bound + (len(vertices) // 2), vpool=vpool, encoding=card_type))
                 # enc.at_least_k(sum_vars, sum_upper_bound + (len(vertices) // 2))
 
-        if conjecture3:
-            for u in vertices:
-                if u > anti(u):
-                    continue
-                # no monochromatic geodesic
-                enc.append([-pc("red", u, anti(u), 0)])
-                enc.append([-pc("blue", u, anti(u), 0)])
-                enc.append([-pc("red", u, anti(u), 1), -pc("blue", u, anti(u), 1)])
+    if conjecture3:
+        for u in vertices:
+            if u > anti(u):
+                continue
+            # no monochromatic geodesic
+            enc.append([-pc("red", u, anti(u), 0)])
+            enc.append([-pc("blue", u, anti(u), 0)])
+            enc.append([-pc("red", u, anti(u), 1), -pc("blue", u, anti(u), 1)])
+
+    if conjecture1:
+        for u in vertices:
+            if u > anti(u):
+                continue
+            enc.append([-pc("red", u, anti(u), 0)])
+            # enc.append([-pc("blue", u, anti(u), 0)])
 
     print(f"number of clauses: {len(enc.clauses)}")
 
@@ -357,13 +386,14 @@ if __name__ == "__main__":
     argparser.add_argument("-b", type=int, help="Upper bound on f function or f'")
     argparser.add_argument("-p", "--fprime", action="store_true", help="Use f' instead of f, i.e., primed version")
     argparser.add_argument("-b2", type=int, help="Upperbound on bad antipodal pairs")  # TODO
-    argparser.add_argument(
-        "--check-conjecture", action="store_true", help="Check conjecture, i.e., whether a variant of the Conjecture holds for the given parameters"
-    )  # TODO
+
+    argparser.add_argument("--conjecture1", action="store_true", help="Vertex pair reachable over monochromatic geodesic/path")
+    # argparser.add_argument("--check-conjecture2", action="store_true", help="Vertex pair reachable over monochromatic geodesic/path or at most one swap")
+
     argparser.add_argument(
         "--conjecture3",
         action="store_true",
-        help="Check conjecture 3, i.e., whether there is a vertex pairs such that monochromatic geodesic or at most one swap with starting with either color",
+        help="Check conjecture 3, i.e., there is a vertex pairs such that monochromatic geodesic or at most one swap with starting with either color",
     )
 
     argparser.add_argument(
@@ -387,6 +417,7 @@ if __name__ == "__main__":
         fprime=args.fprime,
         partial_sym_break=args.partial_sym_break,
         maximum_degree=args.maximum_degree,
+        conjecture1=args.conjecture1,
         conjecture3=args.conjecture3,
         card_type=args.cardinality_contraint,
         path_version=args.path,
