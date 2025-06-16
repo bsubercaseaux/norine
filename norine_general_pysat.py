@@ -57,6 +57,7 @@ def encode(
     partial_sym_break=None,
     maximum_degree=None,
     conjecture1=False,
+    conjecture2=False,
     conjecture3=False,
     card_type=1,
     path_version=False,
@@ -99,6 +100,7 @@ def encode(
                 enc.append([r(u, v), r(anti(u), anti(v))])
 
         r_old = r
+
         def r_new(u, v):
             if v < u:
                 u, v = v, u
@@ -225,6 +227,16 @@ def encode(
             enc.append([-pc("red", u, anti(u), 0)])
             enc.append([-pc("blue", u, anti(u), 0)])
             enc.append([-pc("red", u, anti(u), 1), -pc("blue", u, anti(u), 1)])
+
+    if conjecture2:
+        for u in vertices:
+            if u > anti(u):
+                continue
+            # at most one swap
+            enc.append([-pc("red", u, anti(u), 0)])
+            enc.append([-pc("blue", u, anti(u), 0)])
+            enc.append([-pc("red", u, anti(u), 1)])
+            enc.append([-pc("blue", u, anti(u), 1)])
 
     if conjecture1:
         for u in vertices:
@@ -388,7 +400,7 @@ if __name__ == "__main__":
     argparser.add_argument("-b2", type=int, help="Upperbound on bad antipodal pairs")  # TODO
 
     argparser.add_argument("--conjecture1", action="store_true", help="Vertex pair reachable over monochromatic geodesic/path")
-    # argparser.add_argument("--check-conjecture2", action="store_true", help="Vertex pair reachable over monochromatic geodesic/path or at most one swap")
+    argparser.add_argument("--conjecture2", action="store_true", help="Vertex pair reachable with at most one swap")
 
     argparser.add_argument(
         "--conjecture3",
@@ -418,6 +430,7 @@ if __name__ == "__main__":
         partial_sym_break=args.partial_sym_break,
         maximum_degree=args.maximum_degree,
         conjecture1=args.conjecture1,
+        conjecture2=args.conjecture2,
         conjecture3=args.conjecture3,
         card_type=args.cardinality_contraint,
         path_version=args.path,
