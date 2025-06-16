@@ -61,6 +61,7 @@ def encode(
     conjecture3=False,
     card_type=1,
     path_version=False,
+    b2=None,
 ):
     """
     Encoding from Section 6 of the Overleaf
@@ -123,12 +124,12 @@ def encode(
     S = []
     if sum_upper_bound:
         S = list(range(n))
-
     if conjecture1:
         S = [0]
-
-    if conjecture3:
+    if conjecture3 or conjecture2:
         S = [0, 1]
+    if b2 is not None:
+        S = [0, 1, 2]
 
     if True:
 
@@ -181,7 +182,7 @@ def encode(
                             enc.append([-pc(color, u, v, s), pc(color, u, v, s + 1)])
 
         # Eq 11.
-        if sum_upper_bound:
+        if sum_upper_bound or b2:
             for u in vertices:
                 if u > anti(u):
                     continue
@@ -244,6 +245,9 @@ def encode(
                 continue
             enc.append([-pc("red", u, anti(u), 0)])
             # enc.append([-pc("blue", u, anti(u), 0)])
+
+    if b2:
+        enc.extend(CardEnc.atleast([-pt(u, 1) for u in vertices if u < anti(u)], bound=b2, vpool=vpool, encoding=card_type))
 
     print(f"number of clauses: {len(enc.clauses)}")
 
@@ -393,11 +397,11 @@ if __name__ == "__main__":
     argparser.add_argument("--partial-sym-break", type=int, help="Max comparisons for partial symbreak", default=20)
     argparser.add_argument("--antipodal-coloring", action="store_true", help="Enforce that the coloring is antipodal")
 
-    argparser.add_argument("--path", action="store_true", help="Allow general paths not only geodesics")  # TODO
+    argparser.add_argument("--path", action="store_true", help="Allow general paths not only geodesics")
 
     argparser.add_argument("-b", type=int, help="Upper bound on f function or f'")
     argparser.add_argument("-p", "--fprime", action="store_true", help="Use f' instead of f, i.e., primed version")
-    argparser.add_argument("-b2", type=int, help="Upperbound on bad antipodal pairs")  # TODO
+    argparser.add_argument("-b2", type=int, help="Upperbound on bad antipodal pairs, i.e., strictly more than one swap")  # TODO
 
     argparser.add_argument("--conjecture1", action="store_true", help="Vertex pair reachable over monochromatic geodesic/path")
     argparser.add_argument("--conjecture2", action="store_true", help="Vertex pair reachable with at most one swap")
@@ -434,6 +438,7 @@ if __name__ == "__main__":
         conjecture3=args.conjecture3,
         card_type=args.cardinality_contraint,
         path_version=args.path,
+        b2=args.b2,
     )
 
     # encoding.to_file(f"norine_switches_pysat_{N}_{args.b}.cnf")
