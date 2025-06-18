@@ -88,7 +88,7 @@ def encode(
         def r_new(u, v):
             if v < u:
                 u, v = v, u
-            if u < anti(u):
+            if u < anti(v): # anti(v) is smaller than anti(u)
                 return r_old(u, v)
             else:
                 return -r_old(anti(u), anti(v))
@@ -317,15 +317,16 @@ def encode(
     return enc, var_to_edge
 
 
-
-
-
 import os
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser(description="Norine's conjecture")
     argparser.add_argument("-n", type=int, help="Order of the hypercube graph", required=True)
-    argparser.add_argument("--nauty", action="store_true", help="Use nauty for checking final solutions (only if pysat solver is used)")
+    argparser.add_argument("--tmp-file", type=str, help="Temporary file to store the encoding", default="norine_tmp.cnf")
+    argparser.add_argument("--no-solve", action="store_true", help="Do not use solver, just create the encoding and save it to the temp file")
+    argparser.add_argument(
+        "--nauty", action="store_true", help="Use nauty for checking final solutions for isomorphic copies(only if pysat solver is used)"
+    )
     argparser.add_argument("--use-pysat-solver", action="store_true", help="Use pysat solver instead of custom SMS version")
     argparser.add_argument("-a", "--all", action="store_true", help="Enumerate all models")
     argparser.add_argument("--partial-sym-break", type=int, help="Max comparisons for partial symbreak", default=20)
@@ -343,7 +344,7 @@ if __name__ == "__main__":
     argparser.add_argument(
         "--conjecture3",
         action="store_true",
-        help="Check conjecture 3, i.e., there is a vertex pairs such that monochromatic geodesic or at most one swap with starting with either color",
+        help="Check conjecture 3, i.e., there is a vertex pairs such that monochromatic geodesic/path or at most one swap with starting with either color",
     )
 
     argparser.add_argument(
@@ -352,10 +353,10 @@ if __name__ == "__main__":
         help="Type of cardinality constraint to use in pysat (1 is sequential)",
         default=DEFAULT_CARDINALITY_ENCODING,
     )
-    argparser.add_argument("--no-solve", action="store_true", help="Do not use solver, just create the encoding")
+    
 
     argparser.add_argument("--maximum-degree", type=int, help="Ensure that the first vertex has at most the given degree")
-    argparser.add_argument("--tmp-file", type=str, help="Temporary file to store the encoding", default="norine_tmp.cnf")
+   
 
     args = argparser.parse_args()
     N = args.n
@@ -434,6 +435,7 @@ if __name__ == "__main__":
                 # print("Number of edges:", len(red_edges))
                 if args.nauty:
                     from graph6 import graph6
+
                     with open(path_for_graphs, "a") as f:
                         f.write(graph6(red_edges, N) + "\n")
 
