@@ -127,6 +127,8 @@ def encode(
         S.extend(list(range(n)))
     if conjecture1:
         S.append(0)  # at least one monochromatic geodesic
+    if conjecture2:
+        S.append(0)
     if conjecture3 or conjecture2:
         S.extend([0, 1])
     if b2 is not None:
@@ -136,6 +138,8 @@ def encode(
         S.append(0)
 
     S = sorted(list(set(S)))
+
+    assert S != [], "S must not be empty"
 
     if True:
 
@@ -250,7 +254,8 @@ def encode(
             if u > anti(u):
                 continue
             enc.append([-pc("red", u, anti(u), 0)])
-            # enc.append([-pc("blue", u, anti(u), 0)])
+            if not antipodal:
+                enc.append([-pc("blue", u, anti(u), 0)])
 
     if b2:
         enc.extend(CardEnc.atleast([-pt(u, 1) for u in vertices if u < anti(u)], bound=b2, vpool=vpool, encoding=card_type))
@@ -418,7 +423,6 @@ if __name__ == "__main__":
 
     argparser.add_argument("--conjecture1", action="store_true", help="Vertex pair reachable over monochromatic geodesic/path")
     argparser.add_argument("--conjecture2", action="store_true", help="Vertex pair reachable with at most one swap")
-
     argparser.add_argument(
         "--conjecture3",
         action="store_true",
