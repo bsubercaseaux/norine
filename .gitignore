@@ -1,3 +1,4 @@
 *.cnf
 *.cubes
 .DS_Store
+*__pycache__
