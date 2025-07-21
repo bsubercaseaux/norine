@@ -41,10 +41,12 @@ def encode(
     conjecture1=False,
     conjecture2=False,
     conjecture3=False,
+    conjecture6=False,
     card_type=1,
     path_version=False,
     b2=None,
     b3=None,
+    first_vertex_min_degree=False,
 ):
     """
     Encoding from Section 6 of the Overleaf
@@ -88,7 +90,7 @@ def encode(
         def r_new(u, v):
             if v < u:
                 u, v = v, u
-            if u < anti(v): # anti(v) is smaller than anti(u)
+            if u < anti(v):  # anti(v) is smaller than anti(u)
                 return r_old(u, v)
             else:
                 return -r_old(anti(u), anti(v))
@@ -111,7 +113,7 @@ def encode(
         S.append(0)  # at least one monochromatic geodesic
     if conjecture2:
         S.append(0)
-    if conjecture3 or conjecture2:
+    if conjecture3 or conjecture2 or conjecture6:
         S.extend([0, 1])
     if b2 is not None:
         S.extend([0, 1, 2])
@@ -174,7 +176,7 @@ def encode(
                             enc.append([-pc(color, u, v, s), pc(color, u, v, s + 1)])
 
         # Eq 11.
-        if sum_upper_bound or b2:
+        if sum_upper_bound or b2 or b3 or conjecture6:
             for u in vertices:
                 if u > anti(u):
                     continue
@@ -239,6 +241,12 @@ def encode(
             if not antipodal:
                 enc.append([-pc("blue", u, anti(u), 0)])
 
+    if conjecture6:
+        # all blocked on the 'main' geodesic
+        for i in range(n + 1):
+            v = tuple([0] * (n - i) + [1] * i)
+            enc.append([-pt(v, 1)])  # each vertex blocked on the geodesic
+
     if b2:
         enc.extend(CardEnc.atleast([-pt(u, 1) for u in vertices if u < anti(u)], bound=b2, vpool=vpool, encoding=card_type))
 
@@ -299,7 +307,7 @@ def encode(
                         maxcomparisons=MAX_COMPARISONS,
                     )
 
-    print(f"number of clauses: {len(enc.clauses)}")
+        print(f"number of clauses after adding symmetry breaking: {len(enc.clauses)}")
 
     if maximum_degree is not None:
         # Just for the first vertex, rest by symmetry
@@ -312,7 +320,31 @@ def encode(
             )
         )
 
-    print(f"number of clauses: {len(enc.clauses)}")
+    if first_vertex_min_degree:
+        from counter import counterFunction
+        countUpTo = n
+
+        countVars0 = counterFunction( 
+            [r(vertices[0], v) for v in graph[vertices[0]]],
+            countUpto=countUpTo,
+            vPool = vpool,
+            clauses=enc.clauses,
+        )
+
+        # each vertex doesn't have less edges
+
+        for v in vertices[1:]:
+            countVars = counterFunction(
+                [r(v, u) for u in graph[v]],
+                countUpto=countUpTo,
+                vPool=vpool,
+                clauses=enc.clauses,
+            )
+
+            for i in range(countUpTo):
+                enc.append([-countVars0[i], countVars[i]])
+
+    print(f"Total number of clauses: {len(enc.clauses)}")
 
     return enc, var_to_edge
 
@@ -346,6 +378,11 @@ if __name__ == "__main__":
         action="store_true",
         help="Check conjecture 3, i.e., there is a vertex pairs such that monochromatic geodesic/path or at most one swap with starting with either color",
     )
+    argparser.add_argument(
+        "--conjecture6",
+        action="store_true",
+        help="For each geodesic there is a vertex on the path such that is not blocked. (not compatable with symmetry breaking)",
+    )
 
     argparser.add_argument(
         "--cardinality-contraint",
@@ -353,10 +390,9 @@ if __name__ == "__main__":
         help="Type of cardinality constraint to use in pysat (1 is sequential)",
         default=DEFAULT_CARDINALITY_ENCODING,
     )
-    
 
     argparser.add_argument("--maximum-degree", type=int, help="Ensure that the first vertex has at most the given degree")
-   
+    argparser.add_argument("--first-vertex-min-degree", action="store_true", help="Ensure that the first vertex has the lowest red degree")
 
     args = argparser.parse_args()
     N = args.n
@@ -371,10 +407,12 @@ if __name__ == "__main__":
         conjecture1=args.conjecture1,
         conjecture2=args.conjecture2,
         conjecture3=args.conjecture3,
+        conjecture6=args.conjecture6,
         card_type=args.cardinality_contraint,
         path_version=args.path,
         b2=args.b2,
         b3=args.b3,
+        first_vertex_min_degree=args.first_vertex_min_degree,
     )
 
     # encoding.to_file(f"norine_switches_pysat_{N}_{args.b}.cnf")
