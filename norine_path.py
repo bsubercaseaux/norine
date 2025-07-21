@@ -22,10 +22,10 @@ def encode(n, deg_constraint, cubing_depth, compact_encoding=False):
     vertices = list(itertools.product([0, 1], repeat=n))
     graph = {}
     for v in vertices:
-        graph[v] = set()
+        graph[v] = []
         for i in range(n):
             neighbor = [v[j] if i != j else (1 - v[j]) for j in range(n)]
-            graph[v].add(tuple(neighbor))
+            graph[v].append(tuple(neighbor))
             
     for v in vertices:
         assert len(graph[v]) == n, f"Graph is not a hypercube: {v} has {len(graph[v])} neighbors"
@@ -64,13 +64,13 @@ def encode(n, deg_constraint, cubing_depth, compact_encoding=False):
     negative_edges = []
 
     # Their symmetry breaking clauses
-    for ik, vk in enumerate(graph[int_to_bin(0)]):
-        if ik <= (n+1)//2: # ceil((n)/2)
-            enc.add_clause([e(int_to_bin(0), vk)])
-        elif ik == (n+1)//2 + 1:
-            enc.add_clause([-e(int_to_bin(0), vk)])
-        else:
-            break
+    # for ik, vk in enumerate(graph[int_to_bin(0)]):
+    #     if ik <= (n+1)//2: # ceil((n)/2)
+    #         enc.add_clause([e(int_to_bin(0), vk)])
+    #     elif ik == (n+1)//2 + 1:
+    #         enc.add_clause([-e(int_to_bin(0), vk)])
+    #     else:
+    #         break
 
     if deg_constraint is not None and deg_constraint >= 0:
         enc.exactly_k([e(int_to_bin(0), v) for v in graph[int_to_bin(0)]], deg_constraint)
@@ -86,21 +86,21 @@ def encode(n, deg_constraint, cubing_depth, compact_encoding=False):
     
     original_signed_edges = [(-1, e) for e in positive_edges] + [(1,e) for e in negative_edges] + [(1,e) for e in rest]
     
-    MAX_COMPARISONS =  70 if n == 8 else 40
+    MAX_COMPARISONS =  70 if n == 8 else 35
     
     cls_pre_sb = enc.n_clauses()
-    # for i in range(n):
-    #     permuted_edges = [(s, (flip_i(u, i), flip_i(v, i))) for s, (u, v) in original_signed_edges]
-    #     enc.lex_less_equal([s * e(u, v) for s, (u, v) in original_signed_edges], [s * e(u, v) for s, (u, v) in permuted_edges])
+    for i in range(n):
+        permuted_edges = [(s, (flip_i(u, i), flip_i(v, i))) for s, (u, v) in original_signed_edges]
+        enc.lex_less_equal([s * e(u, v) for s, (u, v) in original_signed_edges], [s * e(u, v) for s, (u, v) in permuted_edges])
       
-    # for i, j in itertools.combinations(range(n), 2):
-    #     permuted_edges = [(s, (swap(i, j, u), swap(i, j, v))) for s, (u, v) in original_signed_edges]
-    #     enc.lex_less_equal([s * e(u, v) for s, (u, v) in original_signed_edges], [s* e(u, v) for s, (u, v) in permuted_edges], max_comparisons=MAX_COMPARISONS)
+    for i, j in itertools.combinations(range(n), 2):
+        permuted_edges = [(s, (swap(i, j, u), swap(i, j, v))) for s, (u, v) in original_signed_edges]
+        enc.lex_less_equal([s * e(u, v) for s, (u, v) in original_signed_edges], [s* e(u, v) for s, (u, v) in permuted_edges], max_comparisons=MAX_COMPARISONS)
         
-    # for (i, j) in itertools.combinations(range(n), 2):
-    #     for k in range(n):
-    #         permuted_edges = [(s, (swap(i, j, flip_i(u, k)), swap(i, j, flip_i(v, k)))) for s, (u, v) in original_signed_edges]
-    #         enc.lex_less_equal([s*e(u, v) for s, (u, v) in original_signed_edges], [s* e(u, v) for s, (u, v) in permuted_edges], max_comparisons=MAX_COMPARISONS)
+    for (i, j) in itertools.combinations(range(n), 2):
+        for k in range(n):
+            permuted_edges = [(s, (swap(i, j, flip_i(u, k)), swap(i, j, flip_i(v, k)))) for s, (u, v) in original_signed_edges]
+            enc.lex_less_equal([s*e(u, v) for s, (u, v) in original_signed_edges], [s* e(u, v) for s, (u, v) in permuted_edges], max_comparisons=MAX_COMPARISONS)
     print(f"Added {enc.n_clauses() - cls_pre_sb} symmetry breaking clauses")
     
     def geodesics(u, v):

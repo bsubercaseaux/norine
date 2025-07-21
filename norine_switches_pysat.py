@@ -61,17 +61,19 @@ def encode(n, sum_upper_bound, fprime=False, deg_constraint=None):
 
     r = lambda u, v: vpool.id(f"r_{min(u,v), max(u, v)}")
 
+
+    for u in vertices:
+        for v in graph[u]:
+            enc.append([r(u, v), -r(u, v)])
+    # enc.append([r(u, v) for u in vertices for v in graph[u]])
+    print(f"top variables: {vpool.top}")
+
     colors = ['red', 'blue']
 
     pc = lambda color, u, v, s: vpool.id(f"p^{color}_{u, v, s}")
 
     pt = lambda u, s : vpool.id(f"p^t_{u, s}")
-    # for u in vertices:
-    #     if u > anti(u): continue
-    #     for v in vertices:
-    #         for color in colors:
-    #             for s in range(n):
-    #                 enc.add_var(f"p^{color}_{u, v, s}")
+
     def int_to_bin(n_):
         return tuple(int(x) for x in bin(n_)[2:].zfill(n))
 
@@ -79,13 +81,13 @@ def encode(n, sum_upper_bound, fprime=False, deg_constraint=None):
     # deg_constraint = 3
     if deg_constraint is not None and deg_constraint >= 0:
         enc.extend(CardEnc.equals([r(int_to_bin(0), v) for v in graph[int_to_bin(0)]], bound=deg_constraint, vpool=vpool))
-        # for u in range(1, 2**n):
-        #     if deg_constraint == 1:
-        #         enc.append([r(int_to_bin(u), v) for v in graph[int_to_bin(u)]])
-        #         # enc.append([-r(int_to_bin(u), v) for v in graph[int_to_bin(u)]])
-        #     else:
-        #         enc.extend(CardEnc.atleast([r(int_to_bin(u), v) for v in graph[int_to_bin(u)]], deg_constraint))
-                # enc.extend(CardEnc.atleast([-r(int_to_bin(u), v) for v in graph[int_to_bin(u)]], deg_constraint))
+        for u in range(1, 2**n):
+            if deg_constraint == 1:
+                enc.append([r(int_to_bin(u), v) for v in graph[int_to_bin(u)]])
+                enc.append([-r(int_to_bin(u), v) for v in graph[int_to_bin(u)]])
+            else:
+                enc.extend(CardEnc.atleast([r(int_to_bin(u), v) for v in graph[int_to_bin(u)]], deg_constraint, vpool=vpool))
+                enc.extend(CardEnc.atleast([-r(int_to_bin(u), v) for v in graph[int_to_bin(u)]], deg_constraint))
 
 
     def dist(u, v):
@@ -97,6 +99,7 @@ def encode(n, sum_upper_bound, fprime=False, deg_constraint=None):
     for u in vertices:
         if u > anti(u): continue
         for v in graph[u]:
+            # continue
             enc.append([-r(u, v), pc('red', u, v, 0)])
             enc.append([r(u, v), pc('blue', u, v, 0)])
 
@@ -109,6 +112,7 @@ def encode(n, sum_upper_bound, fprime=False, deg_constraint=None):
             for v in graph[w]:
                 if dist(u, v) + 1 == dist(u, w):
                     for s in range(n):
+                        # continue
                         # Eq 6.
                         enc.append([-pc('red', u, v, s), -r(v, w), pc('red', u, w, s)])
                         # Eq 7.
@@ -116,6 +120,7 @@ def encode(n, sum_upper_bound, fprime=False, deg_constraint=None):
 
                         if s < n-1:
                             # Eq 8.
+                            # continue
                             enc.append([-pc('red', u, v, s), r(v, w), pc('blue', u, w, s+1)])
                             
                             # Eq 9.
@@ -128,6 +133,7 @@ def encode(n, sum_upper_bound, fprime=False, deg_constraint=None):
             if u == v: continue
             for color in colors:
                 for s in range(n-1):
+                    # continue
                     enc.append([-pc(color, u, v, s), pc(color, u, v, s+1)])
 
 
@@ -137,14 +143,16 @@ def encode(n, sum_upper_bound, fprime=False, deg_constraint=None):
         for s in range(n):
             # enc.add_var(f"p^t_{u, s}")
             for color in colors:
-                enc.append([-pc('red', u, anti(u), s), pt(u, s)])
-                enc.append([-pc('blue', u, anti(u), s), pt(u, s)])
+            #    continue
+               enc.append([-pc('red', u, anti(u), s), pt(u, s)])
+               enc.append([-pc('blue', u, anti(u), s), pt(u, s)])
 
     if fprime:
         for u in vertices:
             if u > anti(u): continue
             # enc.add_var(f"p^t_{u, -1}")
             for s in range(n):
+                # continue
                 enc.append([-pc('red', u, anti(u), s), -pc('blue', u, anti(u), s), pt(u, s-1)])
 
 
@@ -158,21 +166,20 @@ def encode(n, sum_upper_bound, fprime=False, deg_constraint=None):
                     sum_vars.append(-pt(u, s))
 
         enc.extend(CardEnc.atleast(sum_vars, bound=sum_upper_bound, vpool=vpool, encoding=7))
-        # enc.at_least_k(sum_vars, sum_upper_bound)
+
     else:
         sum_vars = []
         for u in vertices:
             if u < anti(u):
                 for s in range(-1, n):
                     sum_vars.append(-pt(u, s))
-        enc.extend(CardEnc.atleast(sum_vars, bound=sum_upper_bound + (len(vertices) // 2), vpool=vpool, encoding=7))
-        # enc.at_least_k(sum_vars, sum_upper_bound + (len(vertices) // 2))
+        enc.extend(CardEnc.atleast(sum_vars, bound=sum_upper_bound + (len(vertices) // 2), vpool=vpool, encoding=3))
+       
     
 
      ## Symmetry breaking
-    MAX_COMPARISONS = 90
+    MAX_COMPARISONS = 120
 
-    # cls_pre_sb = enc.n_clauses()
     original_signed_edges = [(1, (u, v)) for u in vertices for v in graph[u] if u < v]
     for i in range(n):
         permuted_edges = [(s, (flip_i(u, i), flip_i(v, i))) for s, (u, v) in original_signed_edges]
@@ -186,9 +193,6 @@ def encode(n, sum_upper_bound, fprime=False, deg_constraint=None):
         for k in range(n):
             permuted_edges = [(s, (swap(i, j, flip_i(u, k)), swap(i, j, flip_i(v, k)))) for s, (u, v) in original_signed_edges]
             enc = lex_smaller_eq(enc, vpool, [s * r(u, v) for s, (u, v) in original_signed_edges], [s * r(u, v) for s, (u, v) in permuted_edges], maxcomparisons=MAX_COMPARISONS)
-
-            # enc.lex_less_equal([s * r(u, v) for s, (u, v) in original_signed_edges], [s * r(u, v) for s, (u, v) in permuted_edges], max_comparisons=MAX_COMPARISONS)
-    # print(f"Added {enc.n_clauses() - cls_pre_sb} symmetry breaking clauses")
  
     cubing_depth = 15
     def cube_gen():
@@ -226,8 +230,8 @@ def encode(n, sum_upper_bound, fprime=False, deg_constraint=None):
 
     cubes = cube_gen()
     random_cube = random.choice(cubes)
-    for l in random_cube:
-        enc.append([l])
+    # for l in random_cube:
+    #     enc.append([l])
 
     return enc
     
