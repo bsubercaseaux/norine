@@ -13,7 +13,9 @@ from pysat.formula import *
 from pysat.solvers import Solver
 from pysat.card import CardEnc
 
-DEFAULT_CARDINALITY_ENCODING = 1  # selected pysat encoding for cardinality constraints
+random.seed(42) # for shuffling the cubes
+
+DEFAULT_CARDINALITY_ENCODING = 7  # selected pysat encoding for cardinality constraints
 
 
 def anti(v):
@@ -52,6 +54,8 @@ def encode(
     Encoding from Section 6 of the Overleaf
     """
     enc = CNF()
+
+    print(f"Card type: {card_type}")
 
     vpool = IDPool(start_from=1)
     vertices = list(itertools.product([0, 1], repeat=n))
@@ -194,6 +198,7 @@ def encode(
                 for s in S:
                     enc.append([-pc("red", u, anti(u), s), -pc("blue", u, anti(u), s), pt(u, s - 1)])
 
+        print(f"Top variable: {vpool.top}")
         if sum_upper_bound:
             # Eq 12.
             if not fprime:
@@ -213,7 +218,7 @@ def encode(
                             sum_vars.append(-pt(u, s))
                 enc.extend(CardEnc.atleast(sum_vars, bound=sum_upper_bound + (len(vertices) // 2), vpool=vpool, encoding=card_type))
                 # enc.at_least_k(sum_vars, sum_upper_bound + (len(vertices) // 2))
-
+        print(f"Top variable: {vpool.top}")
     if conjecture3:
         for u in vertices:
             if u > anti(u):
@@ -246,6 +251,7 @@ def encode(
         for i in range(n + 1):
             v = tuple([0] * (n - i) + [1] * i)
             enc.append([-pt(v, 1)])  # each vertex blocked on the geodesic
+    print(f"Top variable: {vpool.top}")
 
     if b2:
         enc.extend(CardEnc.atleast([-pt(u, 1) for u in vertices if u < anti(u)], bound=b2, vpool=vpool, encoding=card_type))
@@ -256,6 +262,7 @@ def encode(
         enc.extend(CardEnc.atleast([-pt(u, 0) for u in vertices if u < anti(u)], bound=b3, vpool=vpool, encoding=card_type))
         # print(f"number of clauses: {len(enc.clauses)}")
 
+    print(f"Top variable: {vpool.top}")
     print(f"number of clauses: {len(enc.clauses)}")
 
     ## Symmetry breaking
@@ -348,6 +355,49 @@ def encode(
 
     return enc, var_to_edge
 
+def cube_and_conquer(n, enc, var_to_edge, cubing_depth=10):
+  
+    cubes = []
+    edges = []
+    vertices = list(itertools.product([0, 1], repeat=n))
+    # vertices = [v[::-1] for v in vertices]
+    graph = {}
+    for v in vertices:
+        graph[v] = []
+        for i in range(n):
+            neighbor = [v[j] if i != j else (1 - v[j]) for j in range(n)]
+            graph[v].append(tuple(neighbor))
+
+    edge_to_var = {v: k for k, v in var_to_edge.items()}
+
+    for v in vertices:
+        assert len(graph[v]) == n, f"Graph is not a hypercube: {v} has {len(graph[v])} neighbors"
+
+    # for u in [vertices[30], vertices[50], vertices[60], vertices[80]]:
+    for u in vertices[30:35]:
+        for v in graph[u]:
+            if u < v:
+                edges.append((u, v))
+    random.shuffle(edges)
+    edges = edges[:cubing_depth]
+    
+    edges_lits = []
+    for u, v in edges:
+        elit = edge_to_var[(u, v)] if (u, v) in edge_to_var else edge_to_var[(v, u)]
+        if -elit in edges_lits:
+            continue
+        edges_lits.append(elit)
+    
+    for edge_vals in itertools.product([0, 1], repeat=len(edges_lits)):
+        cube = []
+        for i, edge_lit in enumerate(edges_lits):
+            if edge_vals[i] == 1:
+                cube.append(edge_lit)
+            else:
+                cube.append(-edge_lit)
+        cubes.append(cube)
+    random.shuffle(cubes)
+    return cubes
 
 import os
 
@@ -391,10 +441,15 @@ if __name__ == "__main__":
         default=DEFAULT_CARDINALITY_ENCODING,
     )
 
+    argparser.add_argument("--cnc", type=int, help="Cubing depth for cube and conquer", default=None)
+    
+
     argparser.add_argument("--maximum-degree", type=int, help="Ensure that the first vertex has at most the given degree")
     argparser.add_argument("--first-vertex-min-degree", action="store_true", help="Ensure that the first vertex has the lowest red degree")
 
     args = argparser.parse_args()
+
+    print(f"Arguments: {args}")
     N = args.n
 
     encoding, var_to_edge = encode(
@@ -417,6 +472,22 @@ if __name__ == "__main__":
 
     # encoding.to_file(f"norine_switches_pysat_{N}_{args.b}.cnf")
     tmp_file = args.tmp_file
+
+
+    if args.cnc is not None:
+        print(f"Using cube and conquer with cubing depth {args.cnc}")
+        cubes = cube_and_conquer(
+            N, encoding, var_to_edge, cubing_depth=args.cnc
+        )
+        print(f"Generated {len(cubes)} cubes for cubing depth {args.cnc}")
+        with open(f"n{N}_{args.cnc}.cubes", "w") as f:
+            f.write("p inccnf\n")
+            for cls in encoding.clauses:
+                f.write(" ".join(str(lit) for lit in cls) + " 0\n")
+            for cube in cubes:
+                f.write("a " + " ".join(str(lit) for lit in cube) + " 0\n")
+        print(f"Wrote cubes to n{N}_{args.cnc}.cubes")
+
     if args.no_solve:
         encoding.to_file(tmp_file)
         exit()
@@ -429,9 +500,9 @@ if __name__ == "__main__":
         cmd = f"time ./dynamic/build/src/norine {N} {frequency} {1 if args.all else 0} {tmp_file}"
 
         encoding.to_file(tmp_file)
-        print("Execute command:", cmd)
-        os.system(cmd)
-        os.remove(tmp_file)
+        # print("Execute command:", cmd)
+        # os.system(cmd)
+        # os.remove(tmp_file)
 
     else:
         solver = Solver()
