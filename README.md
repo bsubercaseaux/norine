@@ -20,12 +20,23 @@ python enc/norine_general_pysat.py -n N --conjecture1 --antipodal-coloring --fir
   ```
 - By default, paths are restricted to **geodesics**.  
   To allow **general paths**, use the `--path` option.
-- To apply **partial symmetry-breaking**, use:
+- To set the **max_comp** parameter for symmetry breaking, use:
   ```bash
-  --partial-sym-break
+  --partial-sym-break VALUE
   ```
 
 Run `--help` for a complete list of available options.
+
+---
+
+## Proving Conjecture 4
+
+Similarly, we can proof Conjecture 4 for $n=7$
+
+```bash
+python enc/norine_general_pysat.py -n 7 --conjecture2 --first-vertex-min-degree
+```
+
 
 ---
 
