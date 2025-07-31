@@ -21,7 +21,7 @@ def counterFunction(variables, countUpto, vPool, clauses, atMost=None, atLeast=N
 def seqCounter(variables, countUpto, vPool, clauses, atMost=None, atLeast=None) -> list[int]:
     n = len(variables)
     counterVariables = [[vPool.id() for _ in range(countUpto)] for _ in range(n)]  # Create new variables
-    # print("c\t" + str(counterVariables))
+
     # first element
     counterVariables[0][0] = variables[0]
     for i in range(1, countUpto):
@@ -64,9 +64,13 @@ def totalizerRec(variables, countUpto, vPool, clauses, atmost=None) -> list[int]
                 clauses.append([-left[i], -right[j]])  # summing up should not exceed
             if i + j + 1 < countUpto:
                 # print(i,j,i + j + 1, countUpto)
-                clauses.append([-left[i], -right[j], newCounterVariables[i + j + 1]])  # if in left at least i + 1 and in right at least j + 1 than at least i + j + 2
+                clauses.append(
+                    [-left[i], -right[j], newCounterVariables[i + j + 1]]
+                )  # if in left at least i + 1 and in right at least j + 1 than at least i + j + 2
             if i + j < countUpto:
-                clauses.append([+left[i], +right[j], -newCounterVariables[i + j]])  # if left smaller than i + 1 and right is smaller than j + 1 then new is smaller than i + j + 1
+                clauses.append(
+                    [+left[i], +right[j], -newCounterVariables[i + j]]
+                )  # if left smaller than i + 1 and right is smaller than j + 1 then new is smaller than i + j + 1
         clauses.append([-left[i], +newCounterVariables[i]])
         clauses.append([-right[i], +newCounterVariables[i]])
 

@@ -1,4 +1,3 @@
-
 def lex_smaller_eq(enc, vpool, seq1, seq2, maxcomparisons=None):
     """Ensure that seq1 is lexicographically smaller or equal than seq2"""
     assert len(seq1) == len(seq2)
@@ -20,6 +19,7 @@ def lex_smaller_eq(enc, vpool, seq1, seq2, maxcomparisons=None):
 
 
 import itertools
+
 
 def checkLexMin(red_edges, n, plusNegated=False):
     """

@@ -1,5 +1,5 @@
 """
-Script for checking encoding for bugs. We filter isomorphic copies using different tools and check whether numbers coincide.
+Script for checking various conjectures related to Norine's conjecture and improving asymptotic bounds.
 """
 
 import itertools
@@ -13,7 +13,7 @@ from pysat.formula import *
 from pysat.solvers import Solver
 from pysat.card import CardEnc
 
-random.seed(42) # for shuffling the cubes
+random.seed(42)  # for shuffling the cubes
 
 DEFAULT_CARDINALITY_ENCODING = 7  # selected pysat encoding for cardinality constraints
 
@@ -50,9 +50,6 @@ def encode(
     b3=None,
     first_vertex_min_degree=False,
 ):
-    """
-    Encoding from Section 6 of the Overleaf
-    """
     enc = CNF()
 
     print(f"Card type: {card_type}")
@@ -74,11 +71,11 @@ def encode(
 
     var_to_edge = dict()
 
-    # add dummy clauses to ensure that the variables are created
+    # add clauses to ensure that the variables are created and the first (important if used with dynamic symmetry breaking)
     for u in vertices:
         for v in graph[u]:
             var_to_edge[r(u, v)] = (u, v)
-            enc.append([r(u, v), -r(u, v)])  # Dummy way so the edge variables come first
+            enc.append([r(u, v), -r(u, v)])
 
     if antipodal:
         for u in vertices:
@@ -108,9 +105,8 @@ def encode(
 
     def dist(u, v):
         return sum(1 for i in range(len(u)) if u[i] != v[i])
-        # return sum(u[i] != v[i] for i in range(len(u)))
 
-    S = []
+    S = []  # list of values for the number of swaps
     if sum_upper_bound:
         S.extend(list(range(n)))
     if conjecture1:
@@ -132,7 +128,7 @@ def encode(
     if True:
 
         assert S != [], "S must not be empty"
-        # Eq 4, 5:
+        # Eq 5, 6:
         for u in vertices:
             if u > anti(u):
                 continue
@@ -142,7 +138,7 @@ def encode(
                 if not (antipodal and S == [0]):
                     enc.append([r(u, v), pc("blue", u, v, 0)])
 
-        # Eq 6, 7, 8, 9
+        # Eq 7, 8, 9, 10
         for u in vertices:
             if u > anti(u):
                 continue
@@ -153,21 +149,21 @@ def encode(
 
                     if path_version or dist(u, v) + 1 == dist(u, w):
                         for s in S:
-                            # Eq 6.
-                            enc.append([-pc("red", u, v, s), -r(v, w), pc("red", u, w, s)])
                             # Eq 7.
+                            enc.append([-pc("red", u, v, s), -r(v, w), pc("red", u, w, s)])
+                            # Eq 8.
                             if not (antipodal and S == [0]):
                                 enc.append([-pc("blue", u, v, s), r(v, w), pc("blue", u, w, s)])
 
                             if s < n - 1:
-                                # Eq 8.
+                                # Eq 9.
                                 enc.append([-pc("red", u, v, s), r(v, w), pc("blue", u, w, s + 1)])
 
-                                # Eq 9.
+                                # Eq 10.
                                 if not (antipodal and S == [0]):
                                     enc.append([-pc("blue", u, v, s), -r(v, w), pc("red", u, w, s + 1)])
 
-        # Eq 10.
+        # Eq 11.
         for u in vertices:
             if u > anti(u):
                 continue
@@ -179,13 +175,12 @@ def encode(
                         if s < max(S):
                             enc.append([-pc(color, u, v, s), pc(color, u, v, s + 1)])
 
-        # Eq 11.
+        # Eq 12.
         if sum_upper_bound or b2 or b3 or conjecture6:
             for u in vertices:
                 if u > anti(u):
                     continue
                 for s in range(n):
-                    # enc.add_var(f"p^t_{u, s}")
                     for color in colors:
                         enc.append([-pc("red", u, anti(u), s), pt(u, s)])
                         enc.append([-pc("blue", u, anti(u), s), pt(u, s)])
@@ -194,13 +189,12 @@ def encode(
             for u in vertices:
                 if u > anti(u):
                     continue
-                # enc.add_var(f"p^t_{u, -1}")
                 for s in S:
                     enc.append([-pc("red", u, anti(u), s), -pc("blue", u, anti(u), s), pt(u, s - 1)])
 
         print(f"Top variable: {vpool.top}")
         if sum_upper_bound:
-            # Eq 12.
+            # Eq 13. 
             if not fprime:
                 sum_vars = []
                 for u in vertices:
@@ -209,7 +203,6 @@ def encode(
                             sum_vars.append(-pt(u, s))
 
                 enc.extend(CardEnc.atleast(sum_vars, bound=sum_upper_bound, vpool=vpool, encoding=card_type))
-                # enc.at_least_k(sum_vars, sum_upper_bound)
             else:
                 sum_vars = []
                 for u in vertices:
@@ -217,7 +210,6 @@ def encode(
                         for s in [-1] + S:
                             sum_vars.append(-pt(u, s))
                 enc.extend(CardEnc.atleast(sum_vars, bound=sum_upper_bound + (len(vertices) // 2), vpool=vpool, encoding=card_type))
-                # enc.at_least_k(sum_vars, sum_upper_bound + (len(vertices) // 2))
         print(f"Top variable: {vpool.top}")
     if conjecture3:
         for u in vertices:
@@ -257,7 +249,6 @@ def encode(
         enc.extend(CardEnc.atleast([-pt(u, 1) for u in vertices if u < anti(u)], bound=b2, vpool=vpool, encoding=card_type))
 
     if b3:
-        # print(f"number of clauses: {len(enc.clauses)} asdf")
         assert len([-pt(u, 0) for u in vertices if u < anti(u)]) <= b3, "b3 must be larger than the number of antipodal pairs otherwise pysat fails"
         enc.extend(CardEnc.atleast([-pt(u, 0) for u in vertices if u < anti(u)], bound=b3, vpool=vpool, encoding=card_type))
         # print(f"number of clauses: {len(enc.clauses)}")
@@ -330,11 +321,10 @@ def encode(
     if first_vertex_min_degree:
         from counter import counterFunction
         countUpTo = n
-
-        countVars0 = counterFunction( 
+        countVars0 = counterFunction(
             [r(vertices[0], v) for v in graph[vertices[0]]],
             countUpto=countUpTo,
-            vPool = vpool,
+            vPool=vpool,
             clauses=enc.clauses,
         )
 
@@ -355,8 +345,11 @@ def encode(
 
     return enc, var_to_edge
 
+
 def cube_and_conquer(n, enc, var_to_edge, cubing_depth=10):
-  
+    """
+        Manual cubing. (Automatic cubing turned out to be superior over this cubing)
+    """
     cubes = []
     edges = []
     vertices = list(itertools.product([0, 1], repeat=n))
@@ -373,21 +366,20 @@ def cube_and_conquer(n, enc, var_to_edge, cubing_depth=10):
     for v in vertices:
         assert len(graph[v]) == n, f"Graph is not a hypercube: {v} has {len(graph[v])} neighbors"
 
-    # for u in [vertices[30], vertices[50], vertices[60], vertices[80]]:
     for u in vertices[30:35]:
         for v in graph[u]:
             if u < v:
                 edges.append((u, v))
     random.shuffle(edges)
     edges = edges[:cubing_depth]
-    
+
     edges_lits = []
     for u, v in edges:
         elit = edge_to_var[(u, v)] if (u, v) in edge_to_var else edge_to_var[(v, u)]
         if -elit in edges_lits:
             continue
         edges_lits.append(elit)
-    
+
     for edge_vals in itertools.product([0, 1], repeat=len(edges_lits)):
         cube = []
         for i, edge_lit in enumerate(edges_lits):
@@ -399,6 +391,7 @@ def cube_and_conquer(n, enc, var_to_edge, cubing_depth=10):
     random.shuffle(cubes)
     return cubes
 
+
 import os
 
 if __name__ == "__main__":
@@ -409,7 +402,7 @@ if __name__ == "__main__":
     argparser.add_argument(
         "--nauty", action="store_true", help="Use nauty for checking final solutions for isomorphic copies(only if pysat solver is used)"
     )
-    argparser.add_argument("--use-pysat-solver", action="store_true", help="Use pysat solver instead of custom SMS version")
+    argparser.add_argument("--use-pysat-solver", action="store_true", help="Use pysat solver instead of custom SMS version and check for isomorphic copies at the end")
     argparser.add_argument("-a", "--all", action="store_true", help="Enumerate all models")
     argparser.add_argument("--partial-sym-break", type=int, help="Max comparisons for partial symbreak", default=20)
     argparser.add_argument("--antipodal-coloring", action="store_true", help="Enforce that the coloring is antipodal")
@@ -442,7 +435,6 @@ if __name__ == "__main__":
     )
 
     argparser.add_argument("--cnc", type=int, help="Cubing depth for cube and conquer", default=None)
-    
 
     argparser.add_argument("--maximum-degree", type=int, help="Ensure that the first vertex has at most the given degree")
     argparser.add_argument("--first-vertex-min-degree", action="store_true", help="Ensure that the first vertex has the lowest red degree")
@@ -473,12 +465,9 @@ if __name__ == "__main__":
     # encoding.to_file(f"norine_switches_pysat_{N}_{args.b}.cnf")
     tmp_file = args.tmp_file
 
-
     if args.cnc is not None:
         print(f"Using cube and conquer with cubing depth {args.cnc}")
-        cubes = cube_and_conquer(
-            N, encoding, var_to_edge, cubing_depth=args.cnc
-        )
+        cubes = cube_and_conquer(N, encoding, var_to_edge, cubing_depth=args.cnc)
         print(f"Generated {len(cubes)} cubes for cubing depth {args.cnc}")
         with open(f"n{N}_{args.cnc}.cubes", "w") as f:
             f.write("p inccnf\n")
@@ -492,17 +481,15 @@ if __name__ == "__main__":
         encoding.to_file(tmp_file)
         exit()
 
-    # create solver and enumerate all solutions
-
     if not args.use_pysat_solver:
         # use SMS for solving
         frequency = 30
         cmd = f"time ./dynamic/build/src/norine {N} {frequency} {1 if args.all else 0} {tmp_file}"
 
         encoding.to_file(tmp_file)
-        # print("Execute command:", cmd)
-        # os.system(cmd)
-        # os.remove(tmp_file)
+        print("Execute command:", cmd)
+        os.system(cmd)
+        os.remove(tmp_file)
 
     else:
         solver = Solver()
@@ -530,18 +517,11 @@ if __name__ == "__main__":
             if r:
                 num_models += 1
                 model = solver.get_model()
-                # print("Model:", model)
-
-                # print red edges
                 red_edges = [var_to_edge[abs(lit)] for lit in model[:num_edge_vars] if lit > 0]
-                # print("Red edges:", red_edges)
-
-                # print("Model number:", num_models)
 
                 if checkLexMin(red_edges, N):
                     num_minimal_models += 1
 
-                # print("Number of edges:", len(red_edges))
                 if args.nauty:
                     from graph6 import graph6
 
