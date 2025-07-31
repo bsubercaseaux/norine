@@ -4,7 +4,6 @@ Script for checking various conjectures related to Norine's conjecture and impro
 
 import itertools
 import argparse
-import math
 import random
 
 from lex import lex_smaller_eq, checkLexMin
@@ -13,7 +12,6 @@ from pysat.formula import *
 from pysat.solvers import Solver
 from pysat.card import CardEnc
 
-random.seed(42)  # for shuffling the cubes
 
 DEFAULT_CARDINALITY_ENCODING = 7  # selected pysat encoding for cardinality constraints
 
@@ -194,7 +192,7 @@ def encode(
 
         print(f"Top variable: {vpool.top}")
         if sum_upper_bound:
-            # Eq 13. 
+            # Eq 13.
             if not fprime:
                 sum_vars = []
                 for u in vertices:
@@ -320,6 +318,7 @@ def encode(
 
     if first_vertex_min_degree:
         from counter import counterFunction
+
         countUpTo = n
         countVars0 = counterFunction(
             [r(vertices[0], v) for v in graph[vertices[0]]],
@@ -348,8 +347,11 @@ def encode(
 
 def cube_and_conquer(n, enc, var_to_edge, cubing_depth=10):
     """
-        Manual cubing. (Automatic cubing turned out to be superior over this cubing)
+    Manual cubing. (Automatic cubing turned out to be superior over this cubing)
     """
+
+    random.seed(42)  # for shuffling the cubes
+
     cubes = []
     edges = []
     vertices = list(itertools.product([0, 1], repeat=n))
@@ -402,7 +404,9 @@ if __name__ == "__main__":
     argparser.add_argument(
         "--nauty", action="store_true", help="Use nauty for checking final solutions for isomorphic copies(only if pysat solver is used)"
     )
-    argparser.add_argument("--use-pysat-solver", action="store_true", help="Use pysat solver instead of custom SMS version and check for isomorphic copies at the end")
+    argparser.add_argument(
+        "--use-pysat-solver", action="store_true", help="Use pysat solver instead of custom SMS version and check for isomorphic copies at the end"
+    )
     argparser.add_argument("-a", "--all", action="store_true", help="Enumerate all models")
     argparser.add_argument("--partial-sym-break", type=int, help="Max comparisons for partial symbreak", default=20)
     argparser.add_argument("--antipodal-coloring", action="store_true", help="Enforce that the coloring is antipodal")
@@ -523,6 +527,7 @@ if __name__ == "__main__":
                     num_minimal_models += 1
 
                 if args.nauty:
+                    # we used nauty to check the correctness/completeness of our symmetry breaking
                     from graph6 import graph6
 
                     with open(path_for_graphs, "a") as f:
