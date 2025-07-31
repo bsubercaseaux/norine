@@ -1,5 +1,57 @@
-# Commands for reproducing results
+# Commands for Reproducing Results
 
+We use the Python script `enc/norine_general_pysat.py` to create SAT encodings.  
+The generated formula can either be printed to a file or solved directly using an internal SAT solver.
 
-- `python enc/norine_general_pysat.py -n N --conjecture1 --antipodal-coloring --path` for checking Norines conjecture for `N`. (Optionally omit `--path` to check over geodesics)
-- `python enc/norine_general_pysat.py -n N --conjecture2` checks Conjecture 2 in [Dovarks paper](https://arxiv.org/pdf/1912.07504)
+---
+
+## Proving Conjecture 2
+
+To verify **Conjecture 2** from our submitted paper, use the following command:
+
+```bash
+python enc/norine_general_pysat.py -n N --conjecture1 --antipodal-coloring --first-vertex-min-degree
+```
+
+- `N` is the number of dimensions.
+- To **write the encoding to a file** instead of solving it, add:
+  ```bash
+  --tmp-file FILE --no-solve
+  ```
+- By default, paths are restricted to **geodesics**.  
+  To allow **general paths**, use the `--path` option.
+- To apply **partial symmetry-breaking**, use:
+  ```bash
+  --partial-sym-break
+  ```
+
+Run `--help` for a complete list of available options.
+
+---
+
+## Computing the $f$ and $\hat{f}$ Values
+
+To compute the **$f$ values**, run:
+
+```bash
+python enc/norine_general_pysat.py -n N -b B --first-vertex-min-degree
+```
+
+- Here,  
+  $$
+  B = \alpha \cdot 2^{N-1}
+  $$  
+  where $\alpha$ is the average number of color swaps, and $2^{N-1}$ is the number of antipodal vertex pairs.
+
+To compute **$\hat{f}$ values**, add the `-p` flag:
+
+```bash
+python enc/norine_general_pysat.py -n N -b B -p --first-vertex-min-degree
+```
+
+For example, the two encodings required to compute $\hat{f}$ for `n = 6` are:
+
+```bash
+python enc/norine_general_pysat.py -n 6 -b 28 --first-vertex-min-degree
+python enc/norine_general_pysat.py -n 6 -b 29 --first-vertex-min-degree
+```
