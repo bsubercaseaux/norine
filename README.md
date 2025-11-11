@@ -1,3 +1,7 @@
+# From the Finite to the Infinite: Sharper Asymptotic Bounds on Norin’s Conjecture via SAT
+
+This repository contains the code for our paper on Norin's conjecture on edge-colorings of hypercubes.
+
 # Commands for Reproducing Results
 
 We use the Python 3 script `enc/norine_general_pysat.py` to create SAT encodings.  
@@ -7,7 +11,7 @@ The generated formula can either be printed to a file or solved directly using a
 
 ## Proving Conjecture 2
 
-To verify **Conjecture 2** from our submitted paper, use the following command:
+To verify **Conjecture 2** from our paper, use the following command:
 
 ```bash
 python3 enc/norine_general_pysat.py -n N --conjecture1 --antipodal-coloring --first-vertex-min-degree
@@ -26,6 +30,8 @@ python3 enc/norine_general_pysat.py -n N --conjecture1 --antipodal-coloring --fi
   ```
 
 Run `--help` for a complete list of available options.
+
+**Note**: running this with `-n 6` should terminate almost immediately, with `-n 7` it should take a dozen seconds, and for `-n 8` you will need Cube And Conquer, as described in a later subsection.
 
 ---
 
