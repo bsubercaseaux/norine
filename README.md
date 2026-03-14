@@ -2,6 +2,15 @@
 
 This repository contains the code for our paper on Norin's conjecture on edge-colorings of hypercubes.
 
+# Prerequisites
+
+To install CaDiCaL for direct solving, run
+```bash
+cd dynamic
+sh build-and-install.sh
+cd ..
+```
+
 # Commands for Reproducing Results
 
 We use the Python 3 script `enc/norine_general_pysat.py` to create SAT encodings.  
@@ -9,42 +18,48 @@ The generated formula can either be printed to a file or solved directly using a
 
 ---
 
-## Proving Conjecture 2
+## Conjecture Flags (Paper Order)
 
-To verify **Conjecture 2** from our paper, use the following command:
+The conjecture flags now match the paper order directly:
 
-```bash
-python3 enc/norine_general_pysat.py -n N --conjecture1 --antipodal-coloring --first-vertex-min-degree
-```
+- `--conjecture1`: antipodal coloring, monochromatic **path**
+- `--conjecture2`: antipodal coloring, monochromatic **geodesic**
+- `--conjecture3`: general coloring, path with at most one color change
+- `--conjecture4`: general coloring, geodesic with at most one color change
 
-- `N` is the number of dimensions.
-- To **write the encoding to a file** instead of solving it, add:
-  ```bash
-  --tmp-file FILE --no-solve
-  ```
-- By default, paths are restricted to **geodesics**.  
-  To allow **general paths**, use the `--path` option.
-- To set the **max_comp** parameter for symmetry breaking, use:
-  ```bash
-  --partial-sym-break VALUE
-  ```
+For `--conjecture1` and `--conjecture2`, you must pass `--antipodal-coloring`.
 
-Run `--help` for a complete list of available options.
-
-**Note**: running this with `-n 6` should terminate almost immediately, with `-n 7` it should take a dozen seconds, and for `-n 8` you will need Cube And Conquer, as described in a later subsection.
-
----
-
-## Proving Conjecture 4
-
-Similarly, we can prove Conjecture 4 for $n=7$
+## Example Commands
 
 ```bash
-python3 enc/norine_general_pysat.py -n 7 --conjecture2 --first-vertex-min-degree
+# Conjecture 1
+python3 enc/norine_general_pysat.py -n <N> --conjecture1 --antipodal-coloring --first-vertex-min-degree
+
+# Conjecture 2
+python3 enc/norine_general_pysat.py -n <N> --conjecture2 --antipodal-coloring --first-vertex-min-degree
+
+# Conjecture 3
+python3 enc/norine_general_pysat.py -n <N> --conjecture3 --first-vertex-min-degree
+
+# Conjecture 4
+python3 enc/norine_general_pysat.py -n <N> --conjecture4 --first-vertex-min-degree
 ```
 
+To write any encoding to a file without solving:
 
----
+```bash
+--tmp-file FILE --no-solve
+```
+
+To set the `maxcomparisons` parameter for symmetry breaking:
+
+```bash
+--partial-sym-break VALUE
+```
+
+Run `--help` for the full list of options.
+
+**Note**: running with `-n 6` should terminate almost immediately, with `-n 7` it can take seconds to minutes, and for `-n 8` you may need Cube-and-Conquer.
 
 ## Computing the $f$ and $\hat{f}$ Values
 
@@ -69,10 +84,17 @@ python3 enc/norine_general_pysat.py -n 6 -b 28 --first-vertex-min-degree
 python3 enc/norine_general_pysat.py -n 6 -b 29 --first-vertex-min-degree
 ```
 
+## Encoding File Layout
+
+- `enc/conjecture_encodings.py`: conjectures 1-4
+- `enc/f_encoding.py`: `f`, `f'`, `b2`, `b3`, and conjecture 6 style encoding
+- `enc/encoding_context.py`: hypercube construction, edge variables, antipodal edge mapping
+- `enc/norine_general_pysat.py`: CLI + orchestration + symmetry-breaking / solving
+
 
 ## Details for reproducibility
 
-We used `kissat` version 4.0.2, and `cadical`  version 2.0.0. The cubing tool `march_cu` is available at [https://github.com/marijnheule/CnC/tree/master/march_cu](https://github.com/marijnheule/CnC/tree/master/march_cu), and `proofix` is available at [https://github.com/zaxioms0/proofix][https://github.com/zaxioms0/proofix].
+We used `kissat` version 4.0.2, and `cadical` version 2.0.0. The cubing tool `march_cu` is available at [https://github.com/marijnheule/CnC/tree/master/march_cu](https://github.com/marijnheule/CnC/tree/master/march_cu), and `proofix` is available at [https://github.com/zaxioms0/proofix](https://github.com/zaxioms0/proofix).
 
 For example, to cube a formula using `march_cu` using depth 12 (resulting in ~4000 cubes), run
 

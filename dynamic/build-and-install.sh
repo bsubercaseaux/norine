@@ -37,8 +37,6 @@ CMAKE_BUILD_PARALLEL_LEVEL=$(nproc --all)
 export CMAKE_BUILD_PARALLEL_LEVEL
 CONF_FLAGS=("-fPIC")
 
-CADICAL_DIR="cadical/"
-
 
 while [ $# -gt 0 ]
 do
@@ -58,6 +56,27 @@ if [ $debug = 1 ]; then
 else
 	msg "Build type set to RELEASE"
 fi
+
+#!/usr/bin/env bash
+set -e
+
+CADICAL_COMMIT=f13d74439a5b5c963ac5b02d05ce93a8098018b8
+CADICAL_DIR=cadical
+
+if [ ! -d "$CADICAL_DIR" ]; then
+    echo "Cloning CaDiCaL..."
+    git clone https://github.com/arminbiere/cadical.git "$CADICAL_DIR"
+fi
+
+cd "$CADICAL_DIR"
+
+echo "Checking out fixed commit..."
+git fetch
+git checkout "$CADICAL_COMMIT"
+
+echo "CaDiCaL installed successfully."
+
+cd ..
 
 
 if [ ! -d "$CADICAL_DIR" ]; then

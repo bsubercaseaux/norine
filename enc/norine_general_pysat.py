@@ -2,32 +2,27 @@
 Script for checking various conjectures related to Norine's conjecture and improving asymptotic bounds.
 """
 
-import itertools
 import argparse
+import itertools
+import os
 import random
 
 from lex import lex_smaller_eq, checkLexMin
 
-from pysat.formula import *
-from pysat.solvers import Solver
 from pysat.card import CardEnc
+from pysat.solvers import Solver
+
+from conjecture_encodings import (
+    encode_conjecture1,
+    encode_conjecture2,
+    encode_conjecture3,
+    encode_conjecture4,
+)
+from encoding_context import build_encoding_context, flip_i, swap
+from f_encoding import encode_f_family
 
 
 DEFAULT_CARDINALITY_ENCODING = 7  # selected pysat encoding for cardinality constraints
-
-
-def anti(v):
-    return tuple((1 - x) for x in v)
-
-
-def flip_i(v, i):
-    return tuple((1 - x) if j == i else x for j, x in enumerate(v))
-
-
-def swap(i, j, v):
-    u = list(v)
-    u[i], u[j] = u[j], u[i]
-    return tuple(u)
 
 
 def encode(
@@ -41,6 +36,7 @@ def encode(
     conjecture1=False,
     conjecture2=False,
     conjecture3=False,
+    conjecture4=False,
     conjecture6=False,
     card_type=1,
     path_version=False,
@@ -48,208 +44,48 @@ def encode(
     b3=None,
     first_vertex_min_degree=False,
 ):
-    enc = CNF()
-
     print(f"Card type: {card_type}")
 
-    vpool = IDPool(start_from=1)
-    vertices = list(itertools.product([0, 1], repeat=n))
-    vertices = [v[::-1] for v in vertices]  # reverse to match the order with SMS TODO
-    graph = {}
-    for v in vertices:
-        graph[v] = []
-        for i in range(n):
-            neighbor = [v[j] if i != j else (1 - v[j]) for j in range(n)]
-            graph[v].append(tuple(neighbor))
+    ctx = build_encoding_context(n, antipodal=antipodal)
+    enc = ctx.enc
+    vpool = ctx.vpool
+    vertices = ctx.vertices
+    graph = ctx.graph
+    r = ctx.r
 
-    for v in vertices:
-        assert len(graph[v]) == n, f"Graph is not a hypercube: {v} has {len(graph[v])} neighbors"
+    has_target_encoding = False
 
-    r = lambda u, v: vpool.id(f"r_{min(u,v), max(u, v)}")
-
-    var_to_edge = dict()
-
-    # add clauses to ensure that the variables are created and the first (important if used with dynamic symmetry breaking)
-    for u in vertices:
-        for v in graph[u]:
-            var_to_edge[r(u, v)] = (u, v)
-            enc.append([r(u, v), -r(u, v)])
-
-    if antipodal:
-        for u in vertices:
-            for v in graph[u]:
-                if v < u:
-                    continue
-                # just for SMS
-                enc.append([-r(u, v), -r(anti(u), anti(v))])
-                enc.append([r(u, v), r(anti(u), anti(v))])
-
-        r_old = r
-
-        def r_new(u, v):
-            if v < u:
-                u, v = v, u
-            if u < anti(v):  # anti(v) is smaller than anti(u)
-                return r_old(u, v)
-            else:
-                return -r_old(anti(u), anti(v))
-
-        r = r_new
-
-    colors = ["red", "blue"]
-
-    pc = lambda color, u, v, s: vpool.id(f"p^{color}_{u, v, s}")
-    pt = lambda u, s: vpool.id(f"p^t_{u, s}")
-
-    def dist(u, v):
-        return sum(1 for i in range(len(u)) if u[i] != v[i])
-
-    S = []  # list of values for the number of swaps
-    if sum_upper_bound:
-        S.extend(list(range(n)))
     if conjecture1:
-        S.append(0)  # at least one monochromatic geodesic
+        encode_conjecture1(ctx)
+        has_target_encoding = True
+
     if conjecture2:
-        S.append(0)
-    if conjecture3 or conjecture2 or conjecture6:
-        S.extend([0, 1])
-    if b2 is not None:
-        S.extend([0, 1, 2])
+        encode_conjecture2(ctx)
+        has_target_encoding = True
 
-    if b3:
-        S.append(0)
-
-    S = sorted(list(set(S)))
-
-    assert S != [], "S must not be empty"
-
-    if True:
-
-        assert S != [], "S must not be empty"
-        # Eq 5, 6:
-        for u in vertices:
-            if u > anti(u):
-                continue
-            for v in graph[u]:
-                enc.append([-r(u, v), pc("red", u, v, 0)])
-
-                if not (antipodal and S == [0]):
-                    enc.append([r(u, v), pc("blue", u, v, 0)])
-
-        # Eq 7, 8, 9, 10
-        for u in vertices:
-            if u > anti(u):
-                continue
-            for w in vertices:
-                if w in graph[u]:
-                    continue
-                for v in graph[w]:
-
-                    if path_version or dist(u, v) + 1 == dist(u, w):
-                        for s in S:
-                            # Eq 7.
-                            enc.append([-pc("red", u, v, s), -r(v, w), pc("red", u, w, s)])
-                            # Eq 8.
-                            if not (antipodal and S == [0]):
-                                enc.append([-pc("blue", u, v, s), r(v, w), pc("blue", u, w, s)])
-
-                            if s < n - 1:
-                                # Eq 9.
-                                enc.append([-pc("red", u, v, s), r(v, w), pc("blue", u, w, s + 1)])
-
-                                # Eq 10.
-                                if not (antipodal and S == [0]):
-                                    enc.append([-pc("blue", u, v, s), -r(v, w), pc("red", u, w, s + 1)])
-
-        # Eq 11.
-        for u in vertices:
-            if u > anti(u):
-                continue
-            for v in vertices:
-                if u == v:
-                    continue
-                for color in colors:
-                    for s in S:
-                        if s < max(S):
-                            enc.append([-pc(color, u, v, s), pc(color, u, v, s + 1)])
-
-        # Eq 12.
-        if sum_upper_bound or b2 or b3 or conjecture6:
-            for u in vertices:
-                if u > anti(u):
-                    continue
-                for s in range(n):
-                    for color in colors:
-                        enc.append([-pc("red", u, anti(u), s), pt(u, s)])
-                        enc.append([-pc("blue", u, anti(u), s), pt(u, s)])
-
-        if fprime:
-            for u in vertices:
-                if u > anti(u):
-                    continue
-                for s in S:
-                    enc.append([-pc("red", u, anti(u), s), -pc("blue", u, anti(u), s), pt(u, s - 1)])
-
-        print(f"Top variable: {vpool.top}")
-        if sum_upper_bound:
-            # Eq 13.
-            if not fprime:
-                sum_vars = []
-                for u in vertices:
-                    if u < anti(u):
-                        for s in S:
-                            sum_vars.append(-pt(u, s))
-
-                enc.extend(CardEnc.atleast(sum_vars, bound=sum_upper_bound, vpool=vpool, encoding=card_type))
-            else:
-                sum_vars = []
-                for u in vertices:
-                    if u < anti(u):
-                        for s in [-1] + S:
-                            sum_vars.append(-pt(u, s))
-                enc.extend(CardEnc.atleast(sum_vars, bound=sum_upper_bound + (len(vertices) // 2), vpool=vpool, encoding=card_type))
-        print(f"Top variable: {vpool.top}")
     if conjecture3:
-        for u in vertices:
-            if u > anti(u):
-                continue
-            # no monochromatic geodesic
-            enc.append([-pc("red", u, anti(u), 0)])
-            enc.append([-pc("blue", u, anti(u), 0)])
-            enc.append([-pc("red", u, anti(u), 1), -pc("blue", u, anti(u), 1)])
+        encode_conjecture3(ctx)
+        has_target_encoding = True
 
-    if conjecture2:
-        for u in vertices:
-            if u > anti(u):
-                continue
-            # at most one swap
-            enc.append([-pc("red", u, anti(u), 0)])
-            enc.append([-pc("blue", u, anti(u), 0)])
-            enc.append([-pc("red", u, anti(u), 1)])
-            enc.append([-pc("blue", u, anti(u), 1)])
+    if conjecture4:
+        encode_conjecture4(ctx)
+        has_target_encoding = True
 
-    if conjecture1:
-        for u in vertices:
-            if u > anti(u):
-                continue
-            enc.append([-pc("red", u, anti(u), 0)])
-            if not antipodal:
-                enc.append([-pc("blue", u, anti(u), 0)])
+    uses_f_family = sum_upper_bound is not None or b2 is not None or b3 is not None or conjecture6
+    if uses_f_family:
+        encode_f_family(
+            ctx,
+            sum_upper_bound=sum_upper_bound,
+            fprime=fprime,
+            card_type=card_type,
+            path_version=path_version,
+            b2=b2,
+            b3=b3,
+            conjecture6=conjecture6,
+        )
+        has_target_encoding = True
 
-    if conjecture6:
-        # all blocked on the 'main' geodesic
-        for i in range(n + 1):
-            v = tuple([0] * (n - i) + [1] * i)
-            enc.append([-pt(v, 1)])  # each vertex blocked on the geodesic
-    print(f"Top variable: {vpool.top}")
-
-    if b2:
-        enc.extend(CardEnc.atleast([-pt(u, 1) for u in vertices if u < anti(u)], bound=b2, vpool=vpool, encoding=card_type))
-
-    if b3:
-        assert len([-pt(u, 0) for u in vertices if u < anti(u)]) <= b3, "b3 must be larger than the number of antipodal pairs otherwise pysat fails"
-        enc.extend(CardEnc.atleast([-pt(u, 0) for u in vertices if u < anti(u)], bound=b3, vpool=vpool, encoding=card_type))
-        # print(f"number of clauses: {len(enc.clauses)}")
+    assert has_target_encoding, "No encoding target selected. Use conjecture flags or one of -b/-b2/-b3/--conjecture6."
 
     print(f"Top variable: {vpool.top}")
     print(f"number of clauses: {len(enc.clauses)}")
@@ -257,13 +93,17 @@ def encode(
     ## Symmetry breaking
 
     if partial_sym_break:
-        MAX_COMPARISONS = partial_sym_break
+        max_comparisons = partial_sym_break
 
-        # cls_pre_sb = enc.n_clauses()
         original_signed_edges = [(1, (u, v)) for u in vertices for v in graph[u] if u < v]
         for i in range(n):
             permuted_edges = [(s, (flip_i(u, i), flip_i(v, i))) for s, (u, v) in original_signed_edges]
-            enc = lex_smaller_eq(enc, vpool, [s * r(u, v) for s, (u, v) in original_signed_edges], [s * r(u, v) for s, (u, v) in permuted_edges])
+            enc = lex_smaller_eq(
+                enc,
+                vpool,
+                [s * r(u, v) for s, (u, v) in original_signed_edges],
+                [s * r(u, v) for s, (u, v) in permuted_edges],
+            )
 
         for i, j in itertools.combinations(range(n), 2):
             permuted_edges = [(s, (swap(i, j, u), swap(i, j, v))) for s, (u, v) in original_signed_edges]
@@ -272,7 +112,7 @@ def encode(
                 vpool,
                 [s * r(u, v) for s, (u, v) in original_signed_edges],
                 [s * r(u, v) for s, (u, v) in permuted_edges],
-                maxcomparisons=MAX_COMPARISONS,
+                maxcomparisons=max_comparisons,
             )
 
         for i, j in itertools.combinations(range(n), 2):
@@ -283,27 +123,10 @@ def encode(
                     vpool,
                     [s * r(u, v) for s, (u, v) in original_signed_edges],
                     [s * r(u, v) for s, (u, v) in permuted_edges],
-                    maxcomparisons=MAX_COMPARISONS,
+                    maxcomparisons=max_comparisons,
                 )
 
-        if False:  # complete symmetry breaking
-            for P in itertools.permutations(range(n)):
-                for flip_dimensions in itertools.product([0, 1], repeat=n):
-
-                    def permute_and_flip(v):
-                        # print(f"Permuting {v} with {P} and flipping {flip_dimensions}")
-                        return tuple((v[P[i]] if flip_dimensions[i] == 0 else 1 - v[P[i]] for i in range(n)))
-
-                    permuted_edges = [(s, (permute_and_flip(u), permute_and_flip(v))) for s, (u, v) in original_signed_edges]
-                    enc = lex_smaller_eq(
-                        enc,
-                        vpool,
-                        [s * r(u, v) for s, (u, v) in original_signed_edges],
-                        [s * r(u, v) for s, (u, v) in permuted_edges],
-                        maxcomparisons=MAX_COMPARISONS,
-                    )
-
-        print(f"number of clauses after adding symmetry breaking: {len(enc.clauses)}")
+        print(f"Number of clauses after adding symmetry breaking: {len(enc.clauses)}")
 
     if maximum_degree is not None:
         # Just for the first vertex, rest by symmetry
@@ -319,30 +142,29 @@ def encode(
     if first_vertex_min_degree:
         from counter import counterFunction
 
-        countUpTo = n
-        countVars0 = counterFunction(
+        count_up_to = n
+        count_vars0 = counterFunction(
             [r(vertices[0], v) for v in graph[vertices[0]]],
-            countUpto=countUpTo,
+            countUpto=count_up_to,
             vPool=vpool,
             clauses=enc.clauses,
         )
 
         # each vertex doesn't have less edges
-
         for v in vertices[1:]:
-            countVars = counterFunction(
+            count_vars = counterFunction(
                 [r(v, u) for u in graph[v]],
-                countUpto=countUpTo,
+                countUpto=count_up_to,
                 vPool=vpool,
                 clauses=enc.clauses,
             )
 
-            for i in range(countUpTo):
-                enc.append([-countVars0[i], countVars[i]])
+            for i in range(count_up_to):
+                enc.append([-count_vars0[i], count_vars[i]])
 
     print(f"Total number of clauses: {len(enc.clauses)}")
 
-    return enc, var_to_edge
+    return enc, ctx.var_to_edge
 
 
 def cube_and_conquer(n, enc, var_to_edge, cubing_depth=10):
@@ -355,7 +177,6 @@ def cube_and_conquer(n, enc, var_to_edge, cubing_depth=10):
     cubes = []
     edges = []
     vertices = list(itertools.product([0, 1], repeat=n))
-    # vertices = [v[::-1] for v in vertices]
     graph = {}
     for v in vertices:
         graph[v] = []
@@ -394,8 +215,6 @@ def cube_and_conquer(n, enc, var_to_edge, cubing_depth=10):
     return cubes
 
 
-import os
-
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser(description="Norine's conjecture")
     argparser.add_argument("-n", type=int, help="Order of the hypercube graph", required=True)
@@ -411,19 +230,24 @@ if __name__ == "__main__":
     argparser.add_argument("--partial-sym-break", type=int, help="Max comparisons for partial symbreak", default=20)
     argparser.add_argument("--antipodal-coloring", action="store_true", help="Enforce that the coloring is antipodal")
 
-    argparser.add_argument("--path", action="store_true", help="Allow general paths not only geodesics")
+    # argparser.add_argument("--path", action="store_true", help="Allow general paths not only geodesics")
 
     argparser.add_argument("-b", type=int, help="Upper bound on f function or f'")
     argparser.add_argument("-p", "--fprime", action="store_true", help="Use f' instead of f, i.e., primed version")
     argparser.add_argument("-b2", type=int, help="Upperbound on bad antipodal pairs, i.e., strictly more than one swap")
     argparser.add_argument("-b3", type=int, help="Upperbound on slightly bad antipodal pairs, i.e., more than zero swaps")
 
-    argparser.add_argument("--conjecture1", action="store_true", help="Vertex pair reachable over monochromatic geodesic/path")
-    argparser.add_argument("--conjecture2", action="store_true", help="Vertex pair reachable with at most one swap")
+    argparser.add_argument("--conjecture1", action="store_true", help="(Antipodal coloring) Antipodal vertex pair with monochromatic path")
+    argparser.add_argument("--conjecture2", action="store_true", help="(Antipodal coloring) Antipodal vertex pair with monochromatic geodesic")
     argparser.add_argument(
         "--conjecture3",
         action="store_true",
-        help="Check conjecture 3, i.e., there is a vertex pairs such that monochromatic geodesic/path or at most one swap with starting with either color",
+        help="(General coloring) Antipodal vertex pair with path having at most one color change",
+    )
+    argparser.add_argument(
+        "--conjecture4",
+        action="store_true",
+        help="(General coloring) Antipodal vertex pair with geodesic having at most one color change",
     )
     argparser.add_argument(
         "--conjecture6",
@@ -446,10 +270,10 @@ if __name__ == "__main__":
     args = argparser.parse_args()
 
     print(f"Arguments: {args}")
-    N = args.n
+    n = args.n
 
     encoding, var_to_edge = encode(
-        N,
+        n,
         args.b,
         antipodal=args.antipodal_coloring,
         fprime=args.fprime,
@@ -458,37 +282,36 @@ if __name__ == "__main__":
         conjecture1=args.conjecture1,
         conjecture2=args.conjecture2,
         conjecture3=args.conjecture3,
+        conjecture4=args.conjecture4,
         conjecture6=args.conjecture6,
         card_type=args.cardinality_contraint,
-        path_version=args.path,
         b2=args.b2,
         b3=args.b3,
         first_vertex_min_degree=args.first_vertex_min_degree,
     )
 
-    # encoding.to_file(f"norine_switches_pysat_{N}_{args.b}.cnf")
     tmp_file = args.tmp_file
 
     if args.cnc is not None:
         print(f"Using cube and conquer with cubing depth {args.cnc}")
-        cubes = cube_and_conquer(N, encoding, var_to_edge, cubing_depth=args.cnc)
+        cubes = cube_and_conquer(n, encoding, var_to_edge, cubing_depth=args.cnc)
         print(f"Generated {len(cubes)} cubes for cubing depth {args.cnc}")
-        with open(f"n{N}_{args.cnc}.cubes", "w") as f:
+        with open(f"n{n}_{args.cnc}.cubes", "w") as f:
             f.write("p inccnf\n")
             for cls in encoding.clauses:
                 f.write(" ".join(str(lit) for lit in cls) + " 0\n")
             for cube in cubes:
                 f.write("a " + " ".join(str(lit) for lit in cube) + " 0\n")
-        print(f"Wrote cubes to n{N}_{args.cnc}.cubes")
+        print(f"Wrote cubes to n{n}_{args.cnc}.cubes")
 
     if args.no_solve:
         encoding.to_file(tmp_file)
-        exit()
+        raise SystemExit(0)
 
     if not args.use_pysat_solver:
         # use SMS for solving
         frequency = 30
-        cmd = f"time ./dynamic/build/src/norine {N} {frequency} {1 if args.all else 0} {tmp_file}"
+        cmd = f"time ./dynamic/build/src/norine {n} {frequency} {1 if args.all else 0} {tmp_file}"
 
         encoding.to_file(tmp_file)
         print("Execute command:", cmd)
@@ -501,29 +324,26 @@ if __name__ == "__main__":
             solver.add_clause(clause)
         r = True
 
-        num_edge_vars = 2 ** (N - 1) * N
+        num_edge_vars = 2 ** (n - 1) * n
 
         num_models = 0
         num_minimal_models = 0
 
-        solutions = []
-
-        path_for_graphs = f"graphs_{N}.g6"
-        path_for_filtered_graphs = f"graphs_filtered_{N}.g6"
+        path_for_graphs = f"graphs_{n}.g6"
+        path_for_filtered_graphs = f"graphs_filtered_{n}.g6"
 
         os.remove(path_for_graphs) if os.path.exists(path_for_graphs) else None
 
         print("Start solving...")
         while r:
             r = solver.solve()
-            # print("Result:", r)
 
             if r:
                 num_models += 1
                 model = solver.get_model()
                 red_edges = [var_to_edge[abs(lit)] for lit in model[:num_edge_vars] if lit > 0]
 
-                if checkLexMin(red_edges, N):
+                if checkLexMin(red_edges, n):
                     num_minimal_models += 1
 
                 if args.nauty:
@@ -531,9 +351,7 @@ if __name__ == "__main__":
                     from graph6 import graph6
 
                     with open(path_for_graphs, "a") as f:
-                        f.write(graph6(red_edges, N) + "\n")
-
-                solutions.append(red_edges)
+                        f.write(graph6(red_edges, n) + "\n")
 
                 # block model on edge variables
                 solver.add_clause([-model[i] for i in range(num_edge_vars)])
